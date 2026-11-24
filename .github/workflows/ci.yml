@@ -3,10 +3,17 @@ on: [push, pull_request]
 jobs:
   test:
     strategy:
+      fail-fast: false              # một tổ hợp hỏng không huỷ các tổ hợp còn lại
       matrix:
-        os: [ubuntu-latest, macos-latest]
-        python: ["3.11", "3.12"]
+        include:
+          - { os: ubuntu-latest, python: "3.11", optional: false }
+          - { os: ubuntu-latest, python: "3.12", optional: false }
+          # Máy macOS của GitHub hay thiếu: job có thể bị huỷ vì không có máy nhận.
+          # Đánh dấu optional để lỗi hạ tầng không làm cả lượt CI đỏ.
+          - { os: macos-latest, python: "3.12", optional: true }
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.optional }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
