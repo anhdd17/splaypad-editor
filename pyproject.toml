@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "splaypad"
+version = "0.1.0"
+description = "Text editor cho file lớn dựa trên rope cài bằng implicit splay tree"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-xdist>=3", "pytest-cov>=5", "hypothesis>=6"]
+bench = ["pandas>=2", "matplotlib>=3.8"]
+
+[project.scripts]
+splaypad = "splaypad.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.coverage.run]
+source = ["splaypad"]
+branch = true
