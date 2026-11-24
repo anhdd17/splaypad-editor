@@ -2,7 +2,7 @@ PYTHON ?= python3.12
 VENV   ?= .venv
 PY     := $(VENV)/bin/python
 
-.PHONY: venv install test difftest spike bench plots report run clean
+.PHONY: venv install test difftest spike bench plots report report-docx run clean
 
 venv:
 	test -x $(PY) || $(PYTHON) -m venv $(VENV)
@@ -27,8 +27,13 @@ bench:
 plots:
 	$(PY) bench/plot.py bench/results/ report/figures/
 
-report: plots
-	cd report && latexmk -pdf main.tex
+PANDOC := pandoc report/report.md --citeproc --number-sections --resource-path=report
+
+report:            # PDF, cần typst (brew install typst)
+	$(PANDOC) --pdf-engine=typst -o report/report.pdf
+
+report-docx:       # Word, chỉ cần pandoc
+	$(PANDOC) -o report/report.docx
 
 run:
 	$(PY) -m splaypad $(FILE)

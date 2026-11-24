@@ -30,6 +30,15 @@ make run FILE=path/to/file.txt
 make bench && make plots
 ```
 
+## Báo cáo
+
+Viết bằng Markdown ở `report/report.md`, chuyển bằng [Pandoc](https://pandoc.org):
+
+```bash
+make report         # → report/report.pdf  (cần thêm: brew install typst)
+make report-docx    # → report/report.docx (chỉ cần pandoc)
+```
+
 ## Cấu trúc thư mục
 
 ```
@@ -38,6 +47,6 @@ src/splaypad/editor/   Command, undo/redo, cursor, find, trace
 src/splaypad/ui/       giao diện curses
 tests/                 unit, invariant, differential
 bench/                 sinh trace, runner, plot, kết quả CSV
-report/                báo cáo LaTeX + figures/
+report/                báo cáo Markdown (report.md) + references.bib + figures/
 docs/                  decisions.md, kiến trúc
 ```

@@ -10,6 +10,5 @@ htmlcov/
 # file thử lớn, không commit
 *.big
 bench/data/
-report/*.pdf
-report/*.aux
-report/*.log
+report/report.pdf
+report/report.docx
