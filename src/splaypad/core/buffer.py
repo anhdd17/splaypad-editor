@@ -73,6 +73,9 @@ class TextBuffer(ABC):
     def stats(self) -> Stats: ...
 
     # --- Tiện ích chung ---
+    def check_invariants(self) -> None:
+        """Kiểm tra bất biến nội bộ (ném AssertionError nếu sai). Mặc định: không có gì để kiểm."""
+
     def to_bytes(self) -> bytes:
         return b"".join(self.iter_chunks())
 

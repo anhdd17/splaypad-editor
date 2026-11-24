@@ -51,3 +51,18 @@ Mỗi quyết định ghi: bối cảnh, lựa chọn, lý do, hệ quả. Số 
   - `iter_chunks`, `__len__`, `line_count`, `stats` không đổi cấu trúc cây; các phép đọc còn lại được phép splay.
 - **Hệ quả:** `tests/test_buffer_contract.py` chạy trên mọi buffer có trong factory; thêm cài đặt mới là
   tự động phải qua toàn bộ các test này. Oracle `NaiveBuffer` tự được kiểm với định nghĩa dòng bằng Hypothesis.
+
+## ADR-004 – Chiến lược kiểm thử tính đúng
+
+- **Bối cảnh:** lỗi split/merge thường chỉ lộ ra sau hàng nghìn thao tác; unit test viết tay không đủ.
+- **Lựa chọn:** ba tầng, tất cả chạy trên mọi buffer có trong factory:
+  1. `tests/test_buffer_contract.py` – unit test trường hợp biên theo ADR-003.
+  2. `tests/test_differential.py` – mỗi seed quyết định chunk (1…1024), nội dung ban đầu và 1.000 thao tác
+     (insert/erase/substr/at/line_to_offset/offset_to_line/iter_chunks, độ dài từ 1 byte tới khối 3KB);
+     so từng kết quả (kể cả loại ngoại lệ) với `NaiveBuffer`, so độ dài và số dòng mỗi bước, so toàn bộ nội dung
+     mỗi 100 bước. Khi sai: tự thu nhỏ (bỏ thao tác + thu nhỏ tham số) và in lệnh `replay(...)` dán vào là chạy.
+  3. `tests/test_stateful.py` – `RuleBasedStateMachine` của Hypothesis, chunk 2 byte.
+- **Kiểm chứng chính khung test:** `tests/test_difftools.py` cài ba buffer cố tình lỗi (xoá thiếu byte, crash,
+  sai offset dòng); khung phải bắt được cả ba và thu nhỏ còn ≤ 3 thao tác.
+- **Chi phí:** `make test` (300 seed) ≈ 5s; `make difftest` (10.000 seed × 1.000 thao tác, oracle với chính nó)
+  ≈ 70s trên 10 nhân. `SPLAYPAD_CHECK=1` gọi `check_invariants()` sau mỗi thao tác.
