@@ -100,3 +100,15 @@ Mỗi quyết định ghi: bối cảnh, lựa chọn, lý do, hệ quả. Số 
     số piece tăng theo số lần sửa; gõ liên tiếp thì nối dài piece cuối thay vì tạo piece mới.
 - **Hệ quả:** `tests/test_baselines.py` kiểm tính chất chi phí đặc trưng (độ cao treap, gap không dời khi đọc,
   gap tăng gấp đôi, piece table không copy khi mở). `make test`/`make difftest` chạy cả 4 cấu trúc nên lâu hơn.
+
+## ADR-007 – Undo/redo bằng Command
+
+- **Bối cảnh:** splay tree tự đổi hình dạng cả khi đọc, nên làm cấu trúc persistent để undo rất tốn.
+- **Lựa chọn:** operation log – `InsertCmd`, `PasteCmd`, `DeleteCmd` có `execute`/`undo`, hai stack trong `UndoManager`.
+  - `execute`/`undo` trả về vị trí cursor, để editor đặt lại cursor sau undo/redo.
+  - Gộp bước undo (`absorb`): gõ liền nhau gộp tới ranh giới từ (khoảng trắng → ký tự thường); Backspace liên
+    tiếp gộp lùi, Delete liên tiếp gộp tại chỗ; `PasteCmd` luôn là một bước riêng. Editor gọi `seal()` khi
+    cursor di chuyển để chốt nhóm.
+  - Command mới xoá redo stack; `limit` tuỳ chọn bỏ bước cũ nhất. Command lỗi (ném ngoại lệ) không vào lịch sử.
+- **Kiểm chứng:** `tests/test_undo.py` – chuỗi 300 thao tác ngẫu nhiên trên mọi buffer: undo hết về bản đầu,
+  redo hết về bản cuối.
