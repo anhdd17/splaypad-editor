@@ -7,8 +7,11 @@
 from typing import Callable
 
 from .buffer import TextBuffer
+from .gap import GapBuffer
 from .naive import NaiveBuffer
+from .piece import PieceTable
 from .splay_rope import POLICIES, SplayRope
+from .treap_rope import TreapRope
 
 BUFFERS = ("splay", "treap", "gap", "piece", "naive")
 DEFAULT_CHUNK = 1024  # docs/decisions.md, ADR-002
@@ -17,6 +20,9 @@ DEFAULT_CHUNK = 1024  # docs/decisions.md, ADR-002
 _REGISTRY: dict[str, Callable[[bytes, dict], TextBuffer]] = {
     "naive": lambda data, opts: NaiveBuffer(data),
     "splay": lambda data, opts: SplayRope(data, **opts),
+    "treap": lambda data, opts: TreapRope(data, chunk=opts["chunk"], seed=opts["seed"]),
+    "gap": lambda data, opts: GapBuffer(data, chunk=opts["chunk"]),
+    "piece": lambda data, opts: PieceTable(data),
 }
 
 

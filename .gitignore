@@ -12,3 +12,4 @@ htmlcov/
 bench/data/
 report/report.pdf
 report/report.docx
+bench/logs/

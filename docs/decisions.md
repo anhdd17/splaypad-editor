@@ -86,3 +86,17 @@ Mỗi quyết định ghi: bối cảnh, lựa chọn, lý do, hệ quả. Số 
 - **Ghi chú cho RQ2:** đảm bảo của splay là khấu hao. Lần đầu chạm chunk kề bên có thể sâu (đo được độ sâu 7
   trên cây 16k node), nhưng truy cập lặp lại trong một working set nhỏ luôn ở độ sâu ≤ 2
   (`test_locality_keeps_access_shallow`).
+
+## ADR-006 – Các baseline
+
+- **Bối cảnh:** RQ cần so splay rope với các cấu trúc mà editor thật dùng, trên cùng interface `TextBuffer`.
+- **Lựa chọn:** ba baseline, đều đăng ký trong factory nên tự động chạy contract/differential/stateful test:
+  - `TreapRope` – cùng bố cục với `SplayRope` (chunk, augment `size`/`nl`, fast path, gộp chunk ở chỗ nối),
+    chỉ khác cách cân bằng: độ sâu O(log n) kỳ vọng, đọc không đổi cây. Đây là đối chứng chính cho RQ2/RQ3:
+    chênh lệch đo được quy về *tự điều chỉnh* chứ không phải chi tiết cài đặt.
+    Khi tách đôi một chunk, node mới nhận ưu tiên ngẫu nhiên trong [0, ưu tiên của node cũ) để giữ tính chất heap.
+  - `GapBuffer` – kiểu Emacs; sửa cục bộ rất rẻ, nhảy xa tốn O(khoảng cách); tra dòng quét O(n) bằng `find`/`count`.
+  - `PieceTable` – kiểu Bravo/VS Code cũ, list piece quét tuyến tính; mở file không copy byte nào,
+    số piece tăng theo số lần sửa; gõ liên tiếp thì nối dài piece cuối thay vì tạo piece mới.
+- **Hệ quả:** `tests/test_baselines.py` kiểm tính chất chi phí đặc trưng (độ cao treap, gap không dời khi đọc,
+  gap tăng gấp đôi, piece table không copy khi mở). `make test`/`make difftest` chạy cả 4 cấu trúc nên lâu hơn.
