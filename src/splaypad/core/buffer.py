@@ -95,3 +95,26 @@ class TextBuffer(ABC):
         n = self.line_count()
         if not 0 <= line < n:
             raise IndexError(f"line {line} ngoài phạm vi [0, {n})")
+
+
+NTH_BLOCK = 1 << 16
+
+
+def nth_newline(data, k: int, lo: int, hi: int) -> int:
+    """Vị trí '\\n' thứ k (k ≥ 1) trong data[lo:hi]; giả định là có.
+
+    Đếm theo khối bằng ``count`` (chạy bằng C) để bỏ qua nhanh, chỉ lặp ``find`` trong khối chứa đích.
+    Vẫn O(hi - lo) nhưng nhanh hơn lặp ``find`` từng dòng hàng trăm lần – dùng cho các baseline không có
+    chỉ mục dòng, để chúng không chậm một cách giả tạo trong benchmark.
+    """
+    while True:
+        end = min(lo + NTH_BLOCK, hi)
+        c = data.count(b"\n", lo, end)
+        if c >= k:
+            break
+        k -= c
+        lo = end
+    idx = lo - 1
+    for _ in range(k):
+        idx = data.find(b"\n", idx + 1, end)
+    return idx

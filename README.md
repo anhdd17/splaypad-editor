@@ -24,6 +24,22 @@ make run FILE=path/to/file.txt
 .venv/bin/python -m splaypad FILE --buffer=splay --chunk=1024 --policy=full
 ```
 
+File chưa tồn tại thì mở buffer rỗng, tạo file khi lưu. Lưu ghi ra file tạm rồi `os.replace`, nên lỗi giữa chừng
+không làm hỏng file cũ.
+
+| Phím | Thao tác |
+|---|---|
+| ← → ↑ ↓ | di chuyển (↑↓ nhớ cột khi đi qua dòng ngắn) |
+| Home / End, Ctrl-A / Ctrl-E | đầu / cuối dòng |
+| PgUp / PgDn | cuộn một trang |
+| Backspace / Delete / Enter / Tab | sửa |
+| Ctrl-Z / Ctrl-Y | undo / redo (gõ liền nhau được gộp theo từ) |
+| Ctrl-S | lưu |
+| Ctrl-Q | thoát (bấm hai lần nếu chưa lưu) |
+
+Giới hạn đã biết: cột tính theo số ký tự, nên ký tự rộng (CJK, emoji) làm lệch vị trí cursor trên màn hình;
+tab hiển thị như một khoảng trắng.
+
 ## Tái lập kết quả
 
 ```bash

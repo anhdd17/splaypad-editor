@@ -112,3 +112,14 @@ Mỗi quyết định ghi: bối cảnh, lựa chọn, lý do, hệ quả. Số 
   - Command mới xoá redo stack; `limit` tuỳ chọn bỏ bước cũ nhất. Command lỗi (ném ngoại lệ) không vào lịch sử.
 - **Kiểm chứng:** `tests/test_undo.py` – chuỗi 300 thao tác ngẫu nhiên trên mọi buffer: undo hết về bản đầu,
   redo hết về bản cuối.
+
+## ADR-008 – Tầng editor/UI cho slice S1–S2
+
+- **Tách tầng:** `editor/editor.py` (cursor, viewport, sửa, lưu) không import curses; `ui/keys.py` ánh xạ phím →
+  thao tác và test được không cần terminal; `ui/app.py` chỉ vẽ và đọc phím (`curses.raw()` để nhận Ctrl-S/Q/Z).
+- **Render:** một lần `line_to_offset` cho dòng đầu viewport, sau đó đọc tuần tự bằng `substr` theo khối 4KB.
+  Gọi `line_to_offset` cho từng dòng thì gap buffer / piece table mất hàng chục giây mỗi khung hình trên file 100MB.
+- **Baseline không có chỉ mục dòng** (gap, piece) tìm '\n' thứ k bằng `nth_newline`: `count` theo khối 64KB rồi
+  mới `find` trong khối đích. Vẫn O(n) nhưng chạy ở tốc độ C, để baseline không chậm một cách giả tạo.
+- **Đo nhanh trên file 100MB** (`-O`, Apple Silicon): mở file splay 0,16–0,38s (đạt tiêu chí < 3s);
+  nhảy tới giữa file + render 40 dòng: splay/treap ~0,1ms, piece ~130ms, gap ~350ms.

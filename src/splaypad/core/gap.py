@@ -5,14 +5,14 @@
 
 Sửa tại gap là O(độ dài sửa); sửa ở chỗ khác phải dời gap tới đó trước, tốn O(khoảng cách)
 byte copy. Gap hết chỗ thì cấp lại mảng gấp đôi, O(n). Không có chỉ mục dòng: tra dòng quét
-toàn bộ text bằng ``find``/``count`` (chạy ở tốc độ C nhưng vẫn O(n)). Đọc không dời gap.
+toàn bộ text bằng ``count`` theo khối (chạy ở tốc độ C nhưng vẫn O(n)). Đọc không dời gap.
 
 ``chunk`` được dùng làm kích thước gap tối thiểu khi cấp lại mảng.
 """
 
 from typing import Iterator
 
-from .buffer import Stats, TextBuffer
+from .buffer import Stats, TextBuffer, nth_newline
 
 ITER_BLOCK = 1 << 16
 MIN_GAP = 64
@@ -113,13 +113,8 @@ class GapBuffer(TextBuffer):
         b, gs, ge = self._buf, self._gs, self._ge
         before = b.count(b"\n", 0, gs)
         if line <= before:                              # '\n' thứ line nằm trước gap
-            lo, hi, k, shift = 0, gs, line, 0
-        else:
-            lo, hi, k, shift = ge, len(b), line - before, ge - gs
-        idx = lo - 1
-        for _ in range(k):
-            idx = b.find(b"\n", idx + 1, hi)
-        return idx + 1 - shift
+            return nth_newline(b, line, 0, gs) + 1
+        return nth_newline(b, line - before, ge, len(b)) + 1 - (ge - gs)
 
     def offset_to_line(self, pos: int) -> int:
         self._check_pos(pos)

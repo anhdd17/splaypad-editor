@@ -13,7 +13,7 @@ tăng theo số lần sửa. Gõ liên tục ở cuối piece vừa thêm thì n
 
 from typing import Iterator
 
-from .buffer import Stats, TextBuffer
+from .buffer import Stats, TextBuffer, nth_newline
 
 ITER_BLOCK = 1 << 16
 SRC, START, LEN, NL = range(4)
@@ -136,10 +136,8 @@ class PieceTable(TextBuffer):
         k, base = line, 0                               # tìm '\n' thứ k (đếm từ 1)
         for i, p in enumerate(self._pieces):
             if k <= p[NL]:
-                src, s = self._src(p), p[START]
-                idx = s - 1
-                for _ in range(k):
-                    idx = src.find(b"\n", idx + 1, s + p[LEN])
+                s = p[START]
+                idx = nth_newline(self._src(p), k, s, s + p[LEN])
                 self.nodes_visited += i + 1
                 self.last_access_depth = i + 1
                 return base + idx - s + 1

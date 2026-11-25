@@ -19,8 +19,12 @@ def parse_args(argv=None):
 
 def main(argv=None) -> int:
     args = parse_args(argv)
-    print(f"splaypad: chưa cài UI (slice S1). Tham số: {vars(args)}", file=sys.stderr)
-    return 2
+    if args.record:
+        print("splaypad: --record chưa cài (slice S6)", file=sys.stderr)
+        return 2
+    from .ui.app import run    # import muộn: parse_args dùng được cả khi không có terminal
+
+    return run(args.file, args.buffer, chunk=args.chunk, policy=args.policy, splay_p=args.splay_p)
 
 
 if __name__ == "__main__":

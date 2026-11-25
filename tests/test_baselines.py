@@ -104,3 +104,13 @@ def test_piece_erase_across_pieces():
     ref.erase(3, 12)
     p.check_invariants()
     assert p.to_bytes() == ref.to_bytes() and p.line_count() == ref.line_count()
+
+
+# ------------------------------------------------------------ nth_newline
+
+def test_nth_newline_across_blocks():
+    from splaypad.core.buffer import NTH_BLOCK, nth_newline
+    data = (b"x" * 99 + b"\n") * (3 * NTH_BLOCK // 100)
+    for k in (1, 655, 656, 1500, data.count(b"\n")):
+        assert nth_newline(data, k, 0, len(data)) == 100 * k - 1
+    assert nth_newline(data, 1, 150, len(data)) == 199              # lo khác 0
