@@ -8,14 +8,15 @@ from typing import Callable
 
 from .buffer import TextBuffer
 from .naive import NaiveBuffer
+from .splay_rope import POLICIES, SplayRope
 
 BUFFERS = ("splay", "treap", "gap", "piece", "naive")
-POLICIES = ("full", "noread", "semi", "random")
 DEFAULT_CHUNK = 1024  # docs/decisions.md, ADR-002
 
 # tên → hàm tạo(data, opts). Thêm cài đặt mới bằng một dòng ở đây.
 _REGISTRY: dict[str, Callable[[bytes, dict], TextBuffer]] = {
     "naive": lambda data, opts: NaiveBuffer(data),
+    "splay": lambda data, opts: SplayRope(data, **opts),
 }
 
 

@@ -64,5 +64,25 @@ Mỗi quyết định ghi: bối cảnh, lựa chọn, lý do, hệ quả. Số 
   3. `tests/test_stateful.py` – `RuleBasedStateMachine` của Hypothesis, chunk 2 byte.
 - **Kiểm chứng chính khung test:** `tests/test_difftools.py` cài ba buffer cố tình lỗi (xoá thiếu byte, crash,
   sai offset dòng); khung phải bắt được cả ba và thu nhỏ còn ≤ 3 thao tác.
-- **Chi phí:** `make test` (300 seed) ≈ 5s; `make difftest` (10.000 seed × 1.000 thao tác, oracle với chính nó)
-  ≈ 70s trên 10 nhân. `SPLAYPAD_CHECK=1` gọi `check_invariants()` sau mỗi thao tác.
+- **Chi phí:** `check_invariants()` là O(n) và coverage làm vòng lặp differential chậm ~4 lần, nên:
+  - `make test` (CI): test thường có coverage + differential 100 seed × 4 policy không coverage, invariant
+    mỗi bước → ≈ 46s trên 10 nhân.
+  - `make difftest` (tiêu chí MVP): 10.000 seed × 1.000 thao tác × 4 policy, invariant mỗi 50 bước
+    (`SPLAYPAD_CHECK_EVERY=50`) và ở bước cuối.
+
+## ADR-005 – Thiết kế `SplayRope`
+
+- **Cấu trúc:** implicit splay tree, mỗi node một chunk 1…`chunk_max` byte; augment `size`, `nl`, `own_nl`.
+  Splay bottom-up (zig, zig-zig, zig-zag) theo Lecture 4, viết bằng vòng lặp.
+- **Thao tác:** `split`/`merge` là nền; `insert`/`erase` có **fast path** sửa tại chỗ khi thay đổi nằm gọn trong
+  một chunk (gõ phím, xoá ký tự) – chỉ cộng dồn `size`/`nl` lên tổ tiên rồi splay theo policy.
+- **Chống phân mảnh:** `merge` luôn gộp hai chunk ở chỗ nối nếu tổng ≤ `chunk_max`. Không cần bước dọn riêng;
+  gõ liên tục ở cuối file giữ mọi chunk đầy (`test_typing_at_end_keeps_chunks_full`).
+- **Policy (RQ4)** chỉ áp dụng cho *truy cập*; `split`/`merge` luôn splay đầy đủ vì cần node đích ở gốc:
+  `full` | `noread` (đọc không splay, ghi vẫn splay) | `semi` (zig-zig chỉ quay cha) | `random` (xác suất p,
+  `Random(seed)` riêng để tái lập).
+- **Không đổi cấu trúc:** `__len__`, `line_count`, `iter_chunks`, `stats`. `stats()` duyệt O(n) để lấy
+  `nodes`/`height`, chỉ dùng cho debug/benchmark.
+- **Ghi chú cho RQ2:** đảm bảo của splay là khấu hao. Lần đầu chạm chunk kề bên có thể sâu (đo được độ sâu 7
+  trên cây 16k node), nhưng truy cập lặp lại trong một working set nhỏ luôn ở độ sâu ≤ 2
+  (`test_locality_keeps_access_shallow`).

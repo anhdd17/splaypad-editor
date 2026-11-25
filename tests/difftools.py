@@ -18,8 +18,9 @@ FULL_COMPARE_EVERY = 100            # so toàn bộ nội dung sau mỗi chừng
 Maker = Callable[[bytes, int], TextBuffer]   # (data, chunk) -> buffer
 
 
-def maker_for(kind: str) -> Maker:
-    return lambda data, chunk: make_buffer(kind, data, chunk=chunk)
+def maker_for(kind: str, **opts) -> Maker:
+    """opts: các tham số khác của make_buffer, ví dụ policy="semi"."""
+    return lambda data, chunk: make_buffer(kind, data, chunk=chunk, **opts)
 
 
 @dataclass(frozen=True)
@@ -101,6 +102,7 @@ def apply(op: Op, buf: TextBuffer):
 def replay(make: Maker, chunk: int, init: bytes, ops: list[Op]) -> Failure | None:
     """Chạy ops trên buffer cần test và oracle; trả về khác biệt đầu tiên, hoặc None."""
     check = os.environ.get("SPLAYPAD_CHECK") == "1"
+    check_every = int(os.environ.get("SPLAYPAD_CHECK_EVERY", "1"))   # check_invariants là O(n)
     try:
         a = make(init, chunk)
     except Exception as e:      # noqa: BLE001
@@ -114,7 +116,7 @@ def replay(make: Maker, chunk: int, init: bytes, ops: list[Op]) -> Failure | Non
             return Failure(i, op, f"len={len(a)}", f"len={len(b)}")
         if a.line_count() != b.line_count():
             return Failure(i, op, f"line_count={a.line_count()}", f"line_count={b.line_count()}")
-        if check:
+        if check and (i % check_every == 0 or i == len(ops) - 1):
             try:
                 a.check_invariants()
             except AssertionError as e:

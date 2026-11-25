@@ -12,11 +12,12 @@ install: venv
 	$(PY) -m pip install -q -e ".[dev,bench]"
 	$(PY) -m pip freeze --exclude-editable > requirements-lock.txt
 
-test:
-	SPLAYPAD_CHECK=1 N_SEEDS=300 $(PY) -m pytest -n auto --cov=splaypad
+test:              # nhanh, dùng cho CI: coverage trên test thường + differential 100 seed
+	SPLAYPAD_CHECK=1 $(PY) -m pytest -n auto --cov=splaypad --ignore=tests/test_differential.py
+	SPLAYPAD_CHECK=1 N_SEEDS=100 $(PY) -m pytest -n auto tests/test_differential.py
 
-difftest:
-	SPLAYPAD_CHECK=1 N_SEEDS=10000 $(PY) -m pytest -n auto tests/test_differential.py
+difftest:          # tiêu chí MVP: 10.000 seed × 1.000 thao tác × mọi policy
+	SPLAYPAD_CHECK=1 SPLAYPAD_CHECK_EVERY=50 N_SEEDS=10000 $(PY) -m pytest -n auto tests/test_differential.py
 
 spike:
 	$(PY) bench/spike_build.py
