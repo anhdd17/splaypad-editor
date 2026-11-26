@@ -72,9 +72,12 @@ def loop(scr, ed: Editor, kind: str, policy: str) -> None:
             return
 
 
-def run(path: str, kind: str = "splay", **opts) -> int:
+def run(path: str, kind: str = "splay", record: str | None = None, **opts) -> int:
     t0 = time.perf_counter()
-    ed = Editor.open(path, kind, **opts)
-    ed.message = f"Mở trong {time.perf_counter() - t0:.2f}s"
-    curses.wrapper(loop, ed, kind, opts.get("policy", "full"))
+    ed = Editor.open(path, kind, record=record, **opts)
+    ed.message = f"Mở trong {time.perf_counter() - t0:.2f}s" + (f", đang ghi trace {record}" if record else "")
+    try:
+        curses.wrapper(loop, ed, kind, opts.get("policy", "full"))
+    finally:
+        ed.close()                                      # trace vẫn được lưu nếu app lỗi giữa chừng
     return 0

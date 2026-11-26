@@ -2,7 +2,7 @@ PYTHON ?= python3.12
 VENV   ?= .venv
 PY     := $(VENV)/bin/python
 
-.PHONY: venv install test difftest spike bench plots report report-docx run clean
+.PHONY: venv install test difftest spike bench plots report report-docx run record clean
 
 venv:
 	test -x $(PY) || $(PYTHON) -m venv $(VENV)
@@ -38,6 +38,16 @@ report-docx:       # Word, chỉ cần pandoc
 
 run:
 	$(PY) -m splaypad $(FILE)
+
+REAL := bench/traces/real
+
+record:            # ghi trace thật: make record NAME=report BASE=report/report.md
+	@test -n "$(NAME)" -a -n "$(BASE)" || { echo "cần NAME=... BASE=..."; exit 1; }
+	@test ! -e $(REAL)/$(NAME).trace || { echo "$(REAL)/$(NAME).trace đã có, chọn NAME khác"; exit 1; }
+	cp $(BASE) $(REAL)/$(NAME).base             # file nền giữ nguyên để phát lại
+	cp $(BASE) $(REAL)/$(NAME).work             # bản để sửa (Ctrl-S ghi vào đây)
+	$(PY) -m splaypad $(REAL)/$(NAME).work --record $(REAL)/$(NAME).trace
+	rm -f $(REAL)/$(NAME).work
 
 clean:
 	rm -rf build *.egg-info src/*.egg-info .pytest_cache .coverage htmlcov

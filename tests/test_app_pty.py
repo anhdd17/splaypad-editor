@@ -105,3 +105,22 @@ def test_debug_panel_on_while_editing(tmp_path):
     code, screen = run_app(p, keys)
     assert code == 0 and p.read_bytes() == b"x" * 300 + b"!\n" + b"y" * 50 + b"?"
     assert "rotations" in screen
+
+
+def test_record_trace_then_replay(tmp_path):
+    from splaypad.core import make_buffer
+    from splaypad.editor import read_trace, replay
+    from splaypad.editor.trace import check_base
+    p, tr = tmp_path / "t.txt", tmp_path / "s.trace"
+    base = b"".join(b"row %d\n" % i for i in range(100))
+    p.write_bytes(base)
+    keys = [CTRL_L, *"40", ENTER, *"new ", CTRL_F, *"row 7", ENTER, CTRL_X, CTRL_Z, END, "\x7f",
+            "\x1b[6~", CTRL_S, CTRL_Q]                 # … PgDn (cuộn → nhiều thao tác đọc)
+    code, _ = run_app(p, keys, f"--record={tr}", "--buffer=gap")
+    assert code == 0
+    meta, ops = read_trace(tr.read_text().splitlines())
+    check_base(meta, base)
+    b = make_buffer("splay", base)
+    replay(b, ops)
+    assert b.to_bytes() == p.read_bytes()
+    assert sum(op.kind == "R" for op in ops) > 10

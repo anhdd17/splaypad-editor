@@ -48,6 +48,16 @@ không làm hỏng file cũ.
 Giới hạn đã biết: cột tính theo số ký tự, nên ký tự rộng (CJK, emoji) làm lệch vị trí cursor trên màn hình;
 tab hiển thị như một khoảng trắng.
 
+## Ghi trace thật
+
+```bash
+make record NAME=report BASE=report/report.md
+```
+
+Mở bản sao của `BASE` trong SplayPad; mọi thao tác lên buffer (sửa, đọc khi render, tra dòng) được ghi vào
+`bench/traces/real/NAME.trace`, file nền gốc lưu ở `NAME.base` để benchmark phát lại đúng nội dung ban đầu.
+Định dạng trace: `src/splaypad/editor/trace.py`.
+
 ## Tái lập kết quả
 
 ```bash

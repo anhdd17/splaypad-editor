@@ -156,3 +156,17 @@ Mỗi quyết định ghi: bối cảnh, lựa chọn, lý do, hệ quả. Số 
   Panel cho thấy trực tiếp chi phí đó và so được với `noread` (vẽ không quay) – minh hoạ cho RQ4.
 - **Chi phí của chính panel:** `stats(full=False)` (thêm vào interface) chỉ đọc bộ đếm O(1); `nodes`/`height` cần
   duyệt O(n) nên làm mới tối đa mỗi giây. `stats()` không đổi bộ đếm nên panel không làm sai số liệu nó hiển thị.
+
+## ADR-012 – Editing trace (slice S6)
+
+- **Ghi ở tầng buffer** bằng `TracingBuffer` (bọc một `TextBuffer`), không ở tầng Command: trace chứa đúng những gì
+  cấu trúc dữ liệu phải làm – kể cả thao tác do undo/redo, gõ đè vùng chọn, và các phép đọc khi render (RQ4).
+- **Định dạng** (Flow 4.2, mở rộng): `I pos b'…'` / `D pos len` / `R pos len` / `G line` / `O pos`.
+  Chuỗi là `repr(bytes)`, đọc bằng `ast.literal_eval` (không thực thi code, giữ được mọi byte). Thêm `O`
+  (`offset_to_line`) vì mỗi khung hình đều gọi; `at` ghi thành `R pos 1`.
+- **Không ghi `iter_chunks`** (lưu, tìm): số chunk thực sự duyệt phụ thuộc chỗ dừng, không phát lại chính xác được.
+  Thao tác ném ngoại lệ cũng không ghi.
+- **`# base <size> <sha256>`** ở đầu trace; `check_base` từ chối phát lại trên file nền khác.
+- **Kiểm chứng:** phát lại một phiên soạn thảo trên mọi buffer cho cùng nội dung; phát lại qua `TracingBuffer`
+  sinh lại trace giống từng dòng; test pty ghi bằng gap buffer, phát lại trên splay ra đúng file đã lưu.
+- `make record NAME=… BASE=…` lưu file nền thành `NAME.base` và cho sửa trên bản sao, vì Ctrl-S ghi đè file đang mở.

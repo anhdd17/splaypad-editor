@@ -14,6 +14,7 @@ import tempfile
 
 from ..core import TextBuffer, make_buffer
 from .commands import DeleteCmd, GroupCmd, InsertCmd, PasteCmd
+from .trace import TracingBuffer
 from .undo import UndoManager
 
 MAX_LINE_READ = 1 << 16     # dòng dài hơn chỉ đọc chừng này byte để render / tính cột
@@ -42,14 +43,25 @@ class Editor:
         self.last_find = b""
 
     @classmethod
-    def open(cls, path: str, kind: str = "splay", **opts) -> "Editor":
-        """Đọc cả file một lần rồi build cây O(n). File chưa tồn tại → buffer rỗng, tạo khi lưu."""
+    def open(cls, path: str, kind: str = "splay", record: str | None = None, **opts) -> "Editor":
+        """Đọc cả file một lần rồi build cây O(n). File chưa tồn tại → buffer rỗng, tạo khi lưu.
+
+        record: ghi mọi thao tác lên buffer ra file trace này (slice S6); gọi ``close()`` khi xong.
+        """
         try:
             with open(path, "rb") as f:
                 data = f.read()
         except FileNotFoundError:
             data = b""
-        return cls(make_buffer(kind, data, **opts), path)
+        buf = make_buffer(kind, data, **opts)
+        if record is not None:
+            buf = TracingBuffer(buf, open(record, "w", encoding="ascii", newline="\n"), base=data)
+        return cls(buf, path)
+
+    def close(self) -> None:
+        """Đóng trace nếu đang ghi."""
+        if isinstance(self.buf, TracingBuffer):
+            self.buf.close()
 
     # ================================================================ dòng / cột
 

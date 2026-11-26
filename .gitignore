@@ -13,3 +13,4 @@ bench/data/
 report/report.pdf
 report/report.docx
 bench/logs/
+bench/traces/real/*.work
