@@ -18,6 +18,7 @@ tự điều chỉnh. Kết quả đo chi tiết ở `report/`.
 ```bash
 make install          # tạo .venv, cài package + công cụ dev/bench, ghi requirements-lock.txt
 make test             # unit + giao diện (pty) + differential test
+make lint             # ruff + mypy
 ```
 
 ## Chạy
