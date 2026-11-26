@@ -226,9 +226,10 @@ def main(argv=None) -> int:
     p.add_argument("--exp", nargs="+", choices=("rq1", "rq2", "rq3", "rq4"), default=[])
     p.add_argument("--sizes", type=int, nargs="+", default=list(SIZES), help="MB")
     p.add_argument("--runs", type=int, default=5)
-    p.add_argument("--quick", action="store_true", help="file 1MB, 1 lượt (kiểm tra harness)")
+    p.add_argument("--quick", action="store_true",
+                   help="file 1MB, 1 lượt (kiểm tra harness); ghi vào bench/logs/ trừ khi có --out")
     p.add_argument("--budget", type=float, default=BUDGET_S, help="giây phát lại tối đa mỗi lượt")
-    p.add_argument("--out", type=Path, default=RESULTS)
+    p.add_argument("--out", type=Path, default=None, help=f"thư mục kết quả (mặc định: {RESULTS})")
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--one", help=argparse.SUPPRESS)
     a = p.parse_args(argv)
@@ -240,6 +241,8 @@ def main(argv=None) -> int:
         print("cảnh báo: nên chạy bằng python -O (assert trong code bị tắt)", file=sys.stderr)
     names = ["rq1", "rq2", "rq3", "rq4"] if a.all or not a.exp else a.exp
     sizes, runs = ((1,), 1) if a.quick else (tuple(a.sizes), a.runs)
+    if a.out is None:                                   # lượt thử không lẫn vào bench/results/ (make plots đọc CSV mới nhất)
+        a.out = RESULTS.parent / "logs" / "quick" if a.quick else RESULTS
     configs = experiments(names, sizes)
     print(f"{len(configs)} cấu hình × {runs} lượt = {len(configs) * runs} lần chạy", file=sys.stderr)
     if a.dry_run:
@@ -255,6 +258,7 @@ def main(argv=None) -> int:
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M")
     env = environment()
+    a.out.mkdir(parents=True, exist_ok=True)
     out_csv = a.out / f"bench-{stamp}-{env['commit'] or 'nogit'}.csv"
     write_json(out_csv.with_suffix(".env.json"), {**env, "experiments": names, "sizes": sizes, "runs": runs,
                                                   "warmup_ops": WARMUP_OPS, "budget_s": a.budget,

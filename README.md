@@ -107,7 +107,7 @@ riêng, tối đa 30s phát lại mỗi lượt) và ghi `bench/results/bench-<t
 (CPU, RAM, OS, Python, `pip freeze`). Mất khoảng 1–1,5 giờ trên Apple M4; nên cắm sạc và đóng ứng dụng nặng.
 `make plots` đọc CSV mới nhất, sinh `report/figures/*.png` và bảng số liệu `report/tables/*.md`.
 
-Thử nhanh harness (file 1MB, 1 lượt): `.venv/bin/python -O bench/runner.py --quick`. Xem ma trận: `--dry-run`.
+Thử nhanh harness (file 1MB, 1 lượt, ghi vào `bench/logs/quick/` để không lẫn kết quả thật): `.venv/bin/python -O bench/runner.py --quick`. Xem ma trận: `--dry-run`.
 
 ## Báo cáo
 
