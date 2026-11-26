@@ -2,7 +2,7 @@ PYTHON ?= python3.12
 VENV   ?= .venv
 PY     := $(VENV)/bin/python
 
-.PHONY: venv install test difftest spike bench plots report report-docx run record clean
+.PHONY: venv install test difftest spike bench plots diagrams report report-docx run record clean
 
 venv:
 	test -x $(PY) || $(PYTHON) -m venv $(VENV)
@@ -27,6 +27,10 @@ bench:
 
 plots:
 	$(PY) bench/plot.py bench/results/ report/figures/
+
+diagrams:          # sơ đồ kiến trúc / rope (cần draw.io desktop: brew install --cask drawio)
+	$(PY) report/diagrams/make_diagrams.py
+	for n in architecture rope; do drawio -x -f png -s 2 -b 10 -o report/figures/$$n.png report/diagrams/$$n.drawio; done
 
 PANDOC := pandoc report/report.md --citeproc --number-sections --resource-path=report
 

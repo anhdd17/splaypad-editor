@@ -32,7 +32,7 @@ Tuy nhiên, những đảm bảo này là tiệm cận và khấu hao. Trong th�
 
 Báo cáo này trả lời bốn câu hỏi:
 
-- **RQ1.** Trên thao tác soạn thảo thực tế, rope dùng splay tree hơn kém thế nào so với rope dùng treap (và AVL), piece table và gap buffer về thời gian, bộ nhớ và độ trễ mỗi thao tác (p50/p95/p99)?
+- **RQ1.** Trên thao tác soạn thảo thực tế, rope dùng splay tree hơn kém thế nào so với rope dùng treap, piece table và gap buffer về thời gian, bộ nhớ và độ trễ mỗi thao tác (p50/p95/p99)?
 - **RQ2.** Mức độ cục bộ của thao tác ảnh hưởng thế nào đến lợi thế của splay tree? Chi phí truy cập có tăng theo logarit khoảng cách như dynamic finger theorem dự đoán không?
 - **RQ3.** Kích thước đoạn văn bản mỗi nút (16, 64, 256, 1024 byte) ảnh hưởng thế nào đến hiệu năng và bộ nhớ?
 - **RQ4.** Thao tác đọc để hiển thị cũng gây splay. Biến thể nào cho độ trễ tốt nhất: splay đầy đủ, không splay khi đọc, semi-splay, hay splay ngẫu nhiên [@albers2002]?
@@ -49,44 +49,125 @@ Mục 2 trình bày kiến thức nền về splay tree, rope và các cấu tr�
 
 # Kiến thức nền
 
-<!--
-TODO (tuần 1–2):
-- Splay tree: zig, zig-zig, zig-zag (bottom-up, theo Lecture 4); hình minh hoạ.
-- Phân tích khấu hao: hàm thế năng Φ = Σ log size(x), Access Lemma: chi phí splay ≤ 3(r(root) − r(x)) + 1.
-- Working-set, static finger, dynamic finger theorem: phát biểu, ý nghĩa với soạn thảo.
-- Rope: implicit key (vị trí suy từ size cây con), split/merge.
-- Gap buffer (Emacs), piece table / piece tree (VS Code).
--->
+## Splay tree
+
+Splay tree [@sleator1985] là cây tìm kiếm nhị phân không lưu thông tin cân bằng. Sau mỗi lần truy cập một node $x$, cây thực hiện thao tác *splay*: đưa $x$ lên gốc bằng một dãy phép quay, mỗi bước xét $x$, cha $p$ và ông $g$:
+
+- **zig** – $p$ là gốc: quay $x$ lên một lần;
+- **zig-zig** – $x$ và $p$ cùng là con trái (hoặc cùng là con phải): quay $p$ lên trước, rồi quay $x$;
+- **zig-zag** – $x$ là con phải còn $p$ là con trái (hoặc ngược lại): quay $x$ lên hai lần.
+
+Điểm khác biệt so với việc chỉ quay $x$ lên từng bước nằm ở trường hợp zig-zig: quay $p$ trước làm độ sâu của các node trên đường truy cập giảm khoảng một nửa, đó là lý do splay tree đạt được cận khấu hao.
+
+**Phân tích khấu hao.** Gán cho mỗi node trọng số $w(x) > 0$, đặt $s(x)$ là tổng trọng số trong cây con của $x$ và hạng $r(x) = \log_2 s(x)$. Dùng hàm thế năng $\Phi = \sum_x r(x)$, *Access Lemma* cho biết chi phí khấu hao của việc splay $x$ trong cây gốc $t$ là
+
+$$\hat{c}(x) \le 3\,\bigl(r(t) - r(x)\bigr) + 1 = O\!\left(\log \frac{s(t)}{w(x)}\right).$$
+
+Chọn các trọng số khác nhau cho ra các định lý khác nhau, dù thuật toán không hề biết trọng số:
+
+- *Balance theorem* ($w \equiv 1$): mỗi truy cập tốn $O(\log n)$ khấu hao.
+- *Working-set theorem*: truy cập phần tử $x$ tốn $O(\log(t+1))$, với $t$ là số phần tử khác nhau được truy cập kể từ lần trước $x$ được truy cập. Sửa đi sửa lại một vùng nhỏ vì vậy rẻ.
+- *Static finger theorem*: với một "ngón tay" cố định $f$, truy cập $x$ tốn $O(\log(|x - f| + 1))$.
+- *Dynamic finger theorem* [@cole2000a; @cole2000b]: truy cập thứ $i$ tốn $O(\log(|x_i - x_{i-1}| + 1))$ khấu hao, trong đó khoảng cách đo bằng số phần tử nằm giữa hai lần truy cập liên tiếp. Đây là định lý gắn trực tiếp nhất với soạn thảo: con trỏ thường chỉ di chuyển một đoạn ngắn giữa hai lần sửa.
+
+Với rope chia đoạn, "phần tử" là một chunk. Khoảng cách $d$ byte vì vậy tương ứng khoảng $d / C$ node với $C$ là kích thước chunk, và định lý dự đoán chi phí $O(\log(d/C + 1))$. RQ2 kiểm chứng điều này bằng thực nghiệm.
+
+Hai biến thể được đánh giá ở RQ4: *semi-splay* [@sleator1985] ở bước zig-zig chỉ quay $p$ rồi tiếp tục từ $p$, nên $x$ chỉ được đưa lên khoảng nửa đường; *randomized splay* [@albers2002] chỉ splay với xác suất $p$, đổi số phép quay lấy chi phí đi xuống cây dài hơn ở những lần không splay.
+
+## Rope và khoá ngầm
+
+Rope [@boehm1995] biểu diễn chuỗi bằng một cây nhị phân mà thứ tự in-order của các lá (hoặc các node) ghép lại thành chuỗi. Cây không lưu khoá; mỗi node lưu `size`, tổng số byte trong cây con, và vị trí của một byte được suy ra khi đi xuống: nếu vị trí cần tìm nhỏ hơn `size` của cây con trái thì sang trái, nếu không thì trừ đi rồi xét node hiện tại và cây con phải. Cách đánh "khoá ngầm" (*implicit key*) này cho phép chèn hoặc xoá ở giữa mà không phải đánh lại khoá cho phần còn lại.
+
+![Rope 15 byte với chunk tối đa 4 byte: mỗi node lưu đoạn text, số byte (`size`) và số ký tự xuống dòng (`nl`) của cây con, nên cả vị trí byte lẫn số dòng đều tìm được bằng một lần đi từ gốc xuống.](figures/rope.png)
+
+Hai thao tác nền của rope là *split* (tách thành hai cây tại vị trí $i$) và *merge* (nối hai cây). Mọi thao tác sửa đều viết qua chúng: `insert(i, s)` là split tại $i$ rồi merge ba phần; `erase(i, k)` là hai lần split rồi merge hai đầu. Với splay tree, split tại $i$ là splay node chứa byte $i$ lên gốc rồi cắt một cạnh; merge là splay node phải cùng của cây trái lên gốc rồi gắn cây phải làm con phải. Cả hai đều $O(\log n)$ khấu hao.
+
+Mỗi node của SplayPad giữ một đoạn (chunk) tối đa $C$ byte thay vì một ký tự, để giảm số node, và lưu thêm `nl` là số ký tự `\n` trong cây con, để tra dòng theo cùng cách tra vị trí.
+
+## Các cấu trúc đối chứng
+
+- **Gap buffer** [@finseth1991] – cấu trúc của Emacs: một mảng có một khoảng trống đặt tại con trỏ. Chèn hoặc xoá tại khoảng trống là $O(1)$; sửa ở vị trí khác phải dời khoảng trống, tốn $O(d)$ với $d$ là khoảng cách.
+- **Piece table** [@crowley1998] – giữ file gốc không đổi và một vùng "thêm vào" chỉ ghi nối tiếp; nội dung là danh sách các *piece*, mỗi piece trỏ tới một đoạn của một trong hai vùng. Mở file không copy dữ liệu; chi phí sửa phụ thuộc cách tìm piece (tuyến tính trong bản cổ điển, cây cân bằng trong VS Code [@vscode2018]).
+- **Treap** [@seidel1996] – cây tìm kiếm nhị phân trong đó mỗi node có thêm một độ ưu tiên ngẫu nhiên và cây là heap theo độ ưu tiên. Độ sâu kỳ vọng là $O(\log n)$ với mọi dãy thao tác, split và merge có cài đặt đơn giản, và đọc không làm đổi cây. Treap rope trong SplayPad dùng đúng bố cục node như splay rope nên là đối chứng trực tiếp nhất cho câu hỏi "tự điều chỉnh có đáng không".
 
 # Các công trình liên quan
 
-<!--
-TODO (tuần 2–3):
-- Editor thực tế: VS Code piece tree [@vscode2018], xi-editor (rope trên B-tree), Emacs gap buffer.
-- Các biến thể splay: semi-splay [@sleator1985], randomized splay [@albers2002].
-- Benchmark editing trace [@editingtraces].
--->
+**Cấu trúc văn bản trong editor thật.** Emacs dùng gap buffer [@finseth1991]. @crowley1998 khảo sát các cấu trúc lưu chuỗi văn bản (mảng, gap buffer, danh sách dòng, piece table) và đề xuất piece table là lựa chọn tốt nhất về tổng thể. VS Code ban đầu lưu danh sách dòng; @vscode2018 mô tả việc chuyển sang *piece tree* – piece table với các piece đặt trong cây đỏ-đen và chỉ mục ký tự xuống dòng ở mỗi node – để mở file lớn nhanh và tiết kiệm bộ nhớ. xi-editor [@xi2016] dùng rope cài trên B-tree, mỗi lá giữ một đoạn văn bản cỡ vài trăm tới một nghìn byte và mỗi node lưu tổng hợp ("metric") như số byte, số dòng – cùng ý tưởng chunk và augment mà SplayPad dùng, nhưng với cây cân bằng tĩnh.
+
+**Splay tree và các biến thể.** @sleator1985 giới thiệu splay tree, semi-splay và các định lý working-set, static finger; dynamic finger được chứng minh sau đó bởi @cole2000a và @cole2000b. @albers2002 phân tích splay ngẫu nhiên và cho thấy thực nghiệm rằng bỏ bớt phép quay có thể giảm thời gian chạy. Những công trình này đánh giá trên dãy truy cập trừu tượng; chúng tôi chưa tìm thấy đánh giá splay tree làm rope trên thao tác soạn thảo, nơi các phép đọc để hiển thị chiếm phần lớn số truy cập.
+
+**Benchmark soạn thảo.** @editingtraces công bố các trace soạn thảo thật (vị trí và nội dung từng lần gõ) để đo hiệu năng CRDT và rope. Bộ benchmark của SplayPad dùng cùng ý tưởng nhưng ghi thêm các phép đọc khi render và tra dòng, vì đó chính là biến số của RQ4.
 
 # Thiết kế
 
-<!--
-TODO (tuần 3–5), lấy từ docs/decisions.md:
-- Kiến trúc phân tầng: UI → Editor → TextBuffer → các cài đặt (hình).
-- Interface TextBuffer và ngữ nghĩa (ADR-003).
-- Node: chunk, size, nl, own_nl; chunk mặc định 1024 (ADR-002, kèm bảng spike).
-- Pattern: Strategy, Factory, Command (undo/redo), Observer.
-- Vì sao undo dùng Command thay cho cấu trúc persistent.
--->
+## Kiến trúc
+
+SplayPad chia thành ba tầng (hình dưới). Tầng **UI** (`ui/`) là phần duy nhất phụ thuộc `curses`: vòng lặp vẽ màn hình, ánh xạ phím sang thao tác và debug panel. Tầng **Editor** (`editor/`) giữ trạng thái soạn thảo – con trỏ, vùng chọn, viewport, tìm kiếm, lưu file – cùng lịch sử undo và bộ ghi trace; tầng này không import `curses` nên kiểm thử được bằng unit test thường. Tầng **Core** (`core/`) chỉ biết đến chuỗi byte: một giao diện chung `TextBuffer` và các cài đặt của nó.
+
+![Kiến trúc phân tầng của SplayPad. Tầng trên chỉ gọi tầng dưới qua giao diện `TextBuffer`, nên đổi cấu trúc dữ liệu chỉ cần đổi tham số `--buffer`.](figures/architecture.png)
+
+Các mẫu thiết kế được dùng ở chỗ chúng giải quyết một vấn đề cụ thể:
+
+- **Strategy + Factory.** Năm cài đặt (`SplayRope`, `TreapRope`, `GapBuffer`, `PieceTable` và `NaiveBuffer` dùng làm oracle trong kiểm thử) cùng cài `TextBuffer`; `make_buffer(kind, …)` tạo cài đặt theo tên. Editor, benchmark và bộ test đều chỉ dùng giao diện chung, nên mọi so sánh trong Mục 6 chạy cùng một mã phía trên.
+- **Command.** Mỗi thao tác sửa là một đối tượng có `execute` và `undo` (chi tiết ở Mục 4.4).
+- **Decorator.** `TracingBuffer` bọc một `TextBuffer` bất kỳ và ghi lại mọi lời gọi, nên ghi trace không cần sửa gì ở editor hay ở cấu trúc dữ liệu.
+
+## Giao diện `TextBuffer`
+
+Văn bản được xử lý dưới dạng `bytes`, vị trí là offset byte; UTF-8 chỉ được giải mã ở tầng UI khi vẽ. Giao diện gồm thao tác sửa (`insert`, `erase`), đọc (`substr`, `at`, `iter_chunks`), tra dòng (`line_to_offset`, `offset_to_line`, `line_count`) và `stats` trả về bộ đếm phục vụ đo đạc. Để kiểm thử đối chiếu có nghĩa, ngữ nghĩa ở các trường hợp biên được quy định chặt: offset và số dòng đếm từ 0; $k$ ký tự `\n` cho $k + 1$ dòng; vị trí ngoài phạm vi ném `IndexError`; `substr` cắt bớt ở cuối như slice của Python. Quan trọng nhất cho splay tree: giao diện **cho phép mọi phép đọc thay đổi cấu trúc bên trong**, trừ `iter_chunks`, `__len__`, `line_count` và `stats`. Nhờ vậy tìm kiếm và lưu file (dùng `iter_chunks`) không làm méo hình dạng cây và không lẫn vào số liệu của RQ4.
+
+## Node và kích thước chunk
+
+Mỗi node là một đối tượng Python có `__slots__` gồm bảy trường: `chunk` (tối đa $C$ byte), `left`, `right`, `parent`, `size`, `nl` và `own_nl` (số `\n` trong chính chunk, để không phải đếm lại khi đi qua). Con trỏ `parent` cho phép splay từ dưới lên bằng vòng lặp.
+
+Kích thước chunk mặc định $C = 1024$ được chọn bằng một phép đo sơ bộ trước khi cài đặt: thời gian đọc file và dựng cây cân bằng với các giá trị $C$ khác nhau, so sánh hai cách lưu node (đối tượng `__slots__` và các mảng `array` song song).
+
+: Thời gian mở file 100MB và bộ nhớ đỉnh theo cách lưu node và kích thước chunk (đo sơ bộ, `make spike`). {#tbl:spike}
+
+| chunk (byte) | `__slots__`: mở / RSS | mảng song song: mở / RSS |
+|--:|--:|--:|
+| 1024 | 0,19 s / 279MB | 0,18 s / 272MB |
+| 256 | 0,38 s / 287MB | 0,31 s / 260MB |
+| 64 | 1,00 s / 497MB | 0,74 s / 386MB |
+| 16 | 3,63 s / 1200MB | 2,51 s / 913MB |
+
+Với chunk 1024 hai cách gần như bằng nhau và nhanh hơn mục tiêu 3 giây khoảng 15 lần; mảng song song chỉ thắng rõ ở chunk nhỏ, là cấu hình chỉ dùng trong RQ3. Chúng tôi chọn `__slots__` vì mã splay, split và merge dễ đọc và dễ gỡ lỗi hơn nhiều; RQ3 sau đó xác nhận 1024 là kích thước tốt nhất trong dải đã thử.
+
+## Undo/redo bằng Command thay cho cấu trúc persistent
+
+Một cách làm undo phổ biến với cây là cấu trúc *persistent*: mỗi thao tác tạo phiên bản mới, chia sẻ phần không đổi với phiên bản cũ. Với splay tree cách này rất tốn, vì *mọi* truy cập – kể cả đọc – đều quay cây và do đó phải sao chép cả đường đi. SplayPad dùng operation log: `InsertCmd`, `PasteCmd`, `DeleteCmd` lưu đủ thông tin để đảo ngược (vị trí, và nội dung đã xoá), `GroupCmd` gộp nhiều lệnh thành một bước (gõ đè vùng chọn = xoá + chèn). `UndoManager` giữ hai ngăn xếp undo/redo. Các lần gõ liền nhau được gộp tới ranh giới từ, Backspace hay Delete liên tiếp gộp thành một bước, còn paste luôn là một bước riêng; editor "niêm phong" nhóm hiện tại khi con trỏ di chuyển. Bộ nhớ của lịch sử vì vậy tỉ lệ với lượng văn bản bị sửa chứ không tỉ lệ với số lần truy cập.
 
 # Cài đặt
 
-<!--
-TODO (tuần 5–7):
-- Split/merge khi có chunk; fast path khi gõ phím.
-- Đọc cũng làm cây đổi: hệ quả với API và đa luồng.
-- Dựng cây O(n) khi mở file; cài lặp để tránh giới hạn đệ quy của Python.
-- Kiểm thử: contract, differential, stateful (ADR-004).
--->
+## Split, merge và fast path
+
+`SplayRope` cài `split` và `merge` đúng như Mục 2.2, với hai điểm riêng do chunk. Khi vị trí tách rơi vào giữa một chunk, node đó được tách thành hai node. Khi merge, nếu chunk cuối của cây trái và chunk đầu của cây phải cộng lại không quá $C$ byte thì gộp thành một, nhờ đó cây không bị phân mảnh sau nhiều lần xoá và dán mà không cần bước dọn dẹp riêng.
+
+Phần lớn thao tác trong soạn thảo là gõ hoặc xoá một ký tự, và đi qua split/merge cho mỗi phím là lãng phí. `insert` và `erase` vì vậy có một **fast path**: nếu thay đổi nằm gọn trong một chunk và chunk vẫn hợp lệ sau khi sửa, cây sửa chunk tại chỗ, cộng dồn thay đổi của `size` và `nl` lên các tổ tiên theo con trỏ `parent`, rồi splay node đó theo chính sách đang dùng. Một phím gõ vì vậy tốn một lần đi xuống, một lần copy tối đa $C$ byte và một lần splay. `TreapRope` có cùng fast path, để chênh lệch giữa hai rope chỉ đến từ cách cân bằng.
+
+Chính sách splay (RQ4) chỉ áp dụng cho các thao tác *truy cập* – đọc, tra dòng và sửa theo fast path. Split và merge luôn splay đầy đủ vì chúng cần node đích ở gốc.
+
+## Giới hạn đệ quy và dựng cây khi mở file
+
+Splay tree có thể sâu tới $O(n)$ trong trường hợp xấu (ví dụ sau khi truy cập tuần tự toàn bộ file), vượt xa giới hạn đệ quy mặc định 1000 tầng của Python. Mọi thao tác duyệt cây – tìm vị trí, quay, splay, split, merge, duyệt in-order – vì vậy được viết bằng vòng lặp. Ngoại lệ duy nhất là hàm dựng cây khi mở file: nó cắt dữ liệu thành các chunk rồi dựng cây cân bằng hoàn hảo trong $O(n)$ bằng cách lấy trung điểm làm gốc một cách đệ quy, và cây này sâu khoảng $\log_2 n$ (17 tầng với file 100MB) nên đệ quy là an toàn. Mở file 100MB mất khoảng 0,13 giây (Mục 6.2).
+
+## Đọc cũng làm đổi cây
+
+Vì `substr` hay `line_to_offset` có thể quay cây, các phương thức "đọc" của `SplayRope` thực chất là phương thức sửa đổi trạng thái. Điều này ảnh hưởng tới thiết kế ở ba chỗ. Thứ nhất, render được viết để gọi `line_to_offset` một lần cho dòng đầu màn hình rồi đọc tuần tự bằng `substr` theo khối 4KB, thay vì tra từng dòng. Thứ hai, tìm kiếm và lưu file dùng `iter_chunks`, là thao tác không splay. Thứ ba, cấu trúc không an toàn khi nhiều luồng cùng đọc (Mục 7). Debug panel (F2) hiển thị riêng số phép quay do phím vừa bấm gây ra và số phép quay do lần vẽ màn hình gây ra, để thấy trực tiếp chi phí của việc đọc.
+
+## Kiểm thử tính đúng
+
+Lỗi trong split/merge thường chỉ lộ ra sau hàng nghìn thao tác, nên kiểm thử viết tay không đủ. SplayPad dùng ba tầng, tất cả chạy trên mọi cài đặt có trong factory:
+
+1. **Contract test** – các trường hợp biên của giao diện `TextBuffer` (Mục 4.2).
+2. **Differential test** – mỗi seed sinh một chunk ngẫu nhiên (1–1024 byte), một nội dung ban đầu và 1.000 thao tác ngẫu nhiên; kết quả từng thao tác (kể cả loại ngoại lệ) được so với `NaiveBuffer`, một cài đặt dùng `bytes` thuần hiển nhiên đúng, và bất biến của cây (thứ tự, `size`, `nl`, con trỏ `parent`, tính chất heap của treap) được kiểm định kỳ. Khi phát hiện sai, bộ test tự thu nhỏ chuỗi thao tác và in ra đoạn mã tái hiện lỗi. Chính bộ khung này cũng được kiểm bằng ba buffer cố tình cài sai.
+3. **Stateful test** – máy trạng thái của Hypothesis với chunk 2 byte, để ép split và merge xảy ra ở hầu hết mọi thao tác.
+
+Lần chạy đầy đủ gồm 10.000 seed cho mỗi chính sách splay (40.000 chuỗi thao tác) và 10.000 seed cho mỗi cấu trúc đối chứng; tất cả đều qua. Stateful test đã phát hiện một lỗi thật trong treap rope: khi tách đôi một chunk, node mới nhận độ ưu tiên ngẫu nhiên tuỳ ý và có thể vi phạm tính chất heap; cách sửa là lấy độ ưu tiên ngẫu nhiên trong khoảng $[0, \text{ưu tiên của node cũ})$. Tầng editor và UI có thêm unit test cho undo/redo (300 thao tác ngẫu nhiên, undo hết phải về bản gốc) và test end-to-end chạy ứng dụng thật trong pseudo-terminal rồi kiểm tra nội dung file đã lưu. Tổng cộng `make test` chạy 451 test thường và 700 chuỗi differential.
+
+## Ghi trace soạn thảo
+
+Chế độ `--record` bọc buffer bằng `TracingBuffer`, ghi mỗi lời gọi thành một dòng văn bản: `I pos b'…'` (chèn), `D pos len` (xoá), `R pos len` (đọc), `G line` và `O pos` (tra dòng). Trace được ghi ở tầng buffer chứ không ở tầng lệnh, nên nó chứa đúng những gì cấu trúc dữ liệu phải làm, kể cả thao tác sinh ra từ undo/redo và các phép đọc khi vẽ màn hình. Đầu trace lưu kích thước và mã băm SHA-256 của nội dung ban đầu; khi phát lại, benchmark từ chối chạy trên file nền khác.
 
 # Đánh giá thực nghiệm
 
@@ -199,7 +280,7 @@ Trường hợp `uniform` cho thấy giới hạn của lý thuyết khấu hao:
 
 - *Trace tổng hợp.* Mọi kết luận ở trên dựa trên trace tổng hợp. Chúng được tham số hoá để bao phủ các kiểu truy cập, nhưng tỉ lệ giữa các kiểu trong soạn thảo thật chưa được đo. Trace thật ghi từ chính SplayPad (`make record`) sẽ được bổ sung; trace của @editingtraces chưa được chuyển sang định dạng của chúng tôi.
 - *Ảnh hưởng của CPython.* Gap buffer và piece table dựa vào các primitive viết bằng C (`bytearray`, `list.insert`, `bytes.find`), còn hai rope chạy phần lớn bằng mã Python. Vì vậy thời gian tuyệt đối thiên vị các cấu trúc phẳng, và một bản cài đặt bằng C/Rust có thể cho tỉ lệ khác. Để giảm rủi ro này, chúng tôi báo cáo thêm số node thăm và số phép quay, là các chỉ số không phụ thuộc interpreter; các kết luận về tính cục bộ (RQ2) và chính sách splay (RQ4) đúng trên cả hai loại chỉ số.
-- *Bản cài đặt đối chứng.* Piece table dùng tìm kiếm tuyến tính, không dùng cây như VS Code; gap buffer copy dữ liệu khi mở file và khi nới khoảng trống, làm bộ nhớ đỉnh cao hơn mức cần thiết. Rope dùng AVL được nêu trong RQ1 chưa được cài; treap đại diện cho nhóm cây cân bằng không tự điều chỉnh.
+- *Bản cài đặt đối chứng.* Piece table dùng tìm kiếm tuyến tính, không dùng cây như VS Code; gap buffer copy dữ liệu khi mở file và khi nới khoảng trống, làm bộ nhớ đỉnh cao hơn mức cần thiết. Nhóm cây cân bằng không tự điều chỉnh chỉ có treap đại diện; AVL hay cây đỏ-đen có độ sâu tối đa nhỏ hơn nhưng cũng chỉ đọc khi truy cập, nên chúng tôi kỳ vọng kết luận định tính không đổi.
 - *Ngân sách thời gian.* Bảy cấu hình của gap buffer và piece table bị dừng ở 30 giây. Thống kê của chúng chỉ tính trên phần đầu của trace, nên thực tế còn kém hơn số liệu báo cáo; điều này không đổi kết luận vì các cấu hình đó đã chậm hơn rope hai đến bốn bậc độ lớn.
 - *Một máy, một phiên bản.* Mọi phép đo chạy trên một máy Apple M4 với CPython 3.12. Độ dao động giữa các lượt thấp (hệ số biến thiên median 1,3%), nhưng kết quả chưa được kiểm tra trên kiến trúc x86 hay phiên bản Python khác.
 
