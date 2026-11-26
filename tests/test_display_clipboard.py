@@ -26,7 +26,7 @@ def test_editor_columns_follow_display_width():
     assert e.cursor_line_col() == (1, 7)                        # giữ cột hiển thị khi đi xuống
     e.vertical(-1)
     e.click(0, 5)                                               # cột 5 nằm giữa chữ 日 → đầu chữ
-    assert e.cursor == len("a\t".encode())
+    assert e.cursor == len(b"a\t")
 
 
 def test_system_clipboard_roundtrip(tmp_path):

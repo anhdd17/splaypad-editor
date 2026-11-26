@@ -30,7 +30,7 @@ from array import array
 from datetime import datetime
 from pathlib import Path
 
-from common import MB, RESULTS, TRACES, base_file, commit, environment, machine, peak_rss_mb, write_json
+from common import RESULTS, TRACES, base_file, environment, machine, peak_rss_mb, write_json
 
 SIZES = (1, 10, 100)
 SYNTH_RQ1 = ("local-100", "uniform", "blockpaste", "findreplace", "scroll")
@@ -195,7 +195,7 @@ def run_one(c: dict) -> dict:
 
     srt = sorted(lat[:done])
     n = len(srt)
-    q = lambda p: srt[min(n - 1, int(p * n))] / 1000 if n else 0.0   # noqa: E731  µs
+    q = lambda p: srt[min(n - 1, int(p * n))] / 1000 if n else 0.0
     m = {
         "ops": n, "ops_total": len(ops), "truncated": int(n < len(ops)), "total_s": sum(srt) / 1e9, "mean_us": sum(srt) / n / 1000 if n else 0.0,
         "p50_us": q(0.50), "p95_us": q(0.95), "p99_us": q(0.99), "max_us": srt[-1] / 1000 if n else 0.0,

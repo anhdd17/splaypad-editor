@@ -14,7 +14,6 @@ import argparse
 import csv
 import gc
 import json
-import os
 import platform
 import random
 import resource

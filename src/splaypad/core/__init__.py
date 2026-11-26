@@ -8,4 +8,4 @@ from .piece import PieceTable
 from .splay_rope import SplayRope
 from .treap_rope import TreapRope
 
-__all__ = ["Stats", "TextBuffer", "NaiveBuffer", "SplayRope", "TreapRope", "GapBuffer", "PieceTable", "make_buffer", "available", "BUFFERS", "POLICIES", "DEFAULT_CHUNK"]
+__all__ = ["BUFFERS", "DEFAULT_CHUNK", "POLICIES", "GapBuffer", "NaiveBuffer", "PieceTable", "SplayRope", "Stats", "TextBuffer", "TreapRope", "available", "make_buffer"]

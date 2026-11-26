@@ -22,7 +22,7 @@ def record_session() -> tuple[str, bytes]:
     e.backspace(); e.backspace()
     e.extend_selection(e.home); e.cut()
     e.goto_line(2); e.paste(); e.undo(); e.redo()
-    e.find("hai".encode()); e.insert_text(b"HAI")
+    e.find(b"hai"); e.insert_text(b"HAI")
     e.scroll(20, 10); e.visible_lines(10, 40); e.cursor_line_col()
     return out.getvalue(), buf.to_bytes()
 

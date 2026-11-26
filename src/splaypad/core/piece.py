@@ -11,7 +11,7 @@ tăng theo số lần sửa. Gõ liên tục ở cuối piece vừa thêm thì n
 ``chunk`` không dùng (piece table không chia khối cố định).
 """
 
-from typing import Iterator
+from collections.abc import Iterator
 
 from .buffer import Stats, TextBuffer, nth_newline
 
@@ -177,7 +177,7 @@ class PieceTable(TextBuffer):
             src, s, n = self._src(p), p[START], p[LEN]
             assert p[SRC] in (0, 1), f"src {p[SRC]}"
             assert n > 0, "piece rỗng"
-            assert 0 <= s and s + n <= len(src), f"piece [{s}, {s + n}) ngoài bộ đệm dài {len(src)}"
+            assert s >= 0 and s + n <= len(src), f"piece [{s}, {s + n}) ngoài bộ đệm dài {len(src)}"
             assert p[NL] == src.count(b"\n", s, s + n), "nl của piece sai"
             total += n
             nl += p[NL]

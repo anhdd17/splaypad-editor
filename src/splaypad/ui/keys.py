@@ -103,9 +103,9 @@ def handle_mouse(ed: Editor, x: int, y: int, bstate: int, view: dict) -> None:
         ed.scroll(-WHEEL_LINES, view["text_h"])
     elif bstate & down:
         ed.scroll(WHEEL_LINES, view["text_h"])
-    elif bstate & (curses.BUTTON1_PRESSED | curses.BUTTON1_CLICKED):
-        if 0 <= y < view["text_h"] and x >= view["gutter"]:
-            ed.click(ed.top + y, ed.left + x - view["gutter"])
+    elif bstate & (curses.BUTTON1_PRESSED | curses.BUTTON1_CLICKED) and 0 <= y < view["text_h"] \
+            and x >= view["gutter"]:
+        ed.click(ed.top + y, ed.left + x - view["gutter"])
 
 
 def handle_key(ed: Editor, key: int | str, height: int, state: dict) -> str | None:

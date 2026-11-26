@@ -4,7 +4,8 @@ Cài thêm buffer mới vào factory là nó tự động phải qua toàn bộ 
 """
 
 import pytest
-from hypothesis import given, strategies as st
+from hypothesis import given
+from hypothesis import strategies as st
 
 from splaypad.core import NaiveBuffer, available, make_buffer
 

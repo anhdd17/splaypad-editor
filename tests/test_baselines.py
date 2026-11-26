@@ -9,7 +9,6 @@ import pytest
 
 from splaypad.core import GapBuffer, NaiveBuffer, PieceTable, TreapRope
 
-
 # ------------------------------------------------------------ TreapRope
 
 def test_treap_constructor_rejects_bad_chunk():

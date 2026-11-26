@@ -19,6 +19,7 @@ from pathlib import Path
 
 from ..core import TextBuffer, make_buffer
 from . import display
+from .clipboard import SystemClipboard
 from .commands import DeleteCmd, GroupCmd, InsertCmd, PasteCmd
 from .trace import TracingBuffer
 from .undo import UndoManager
@@ -72,7 +73,7 @@ class Editor:
         self.mark: int | None = None
         self._shift_sel = False             # vùng chọn tạo bằng Shift+mũi tên
         self.clipboard = b""
-        self.system_clipboard = None        # clipboard.SystemClipboard: copy/cut ghi cả ra, paste ưu tiên đọc từ đó
+        self.system_clipboard: SystemClipboard | None = None   # clipboard.SystemClipboard: copy/cut ghi cả ra, paste ưu tiên đọc từ đó
         self.row_lens: list[int] = []      # độ rộng hiển thị từng dòng ở lần visible_lines gần nhất
         self.last_find = b""
 
@@ -92,7 +93,8 @@ class Editor:
         t_read = time.perf_counter() - t0
         buf = make_buffer(kind, data, **opts)
         if record is not None:
-            buf = TracingBuffer(buf, open(record, "w", encoding="ascii", newline="\n"), base=data)
+            out = open(record, "w", encoding="ascii", newline="\n")  # noqa: SIM115 – TracingBuffer giữ file, close() đóng
+            buf = TracingBuffer(buf, out, base=data)
         no_write = os.path.exists(path) and not os.access(path, os.W_OK)
         ed = cls(buf, path, tab_width=tab_width, read_only=read_only or no_write)
         if no_write and not read_only:

@@ -231,3 +231,15 @@ Mỗi quyết định ghi: bối cảnh, lựa chọn, lý do, hệ quả. Số 
 - **Kiểm chứng giao diện:** `tests/ptyterm.py` chạy app thật trong pty và dựng lại màn hình bằng `pyte`, nên test
   kiểm được chữ, màu, vị trí cursor (`tests/test_ui_screen.py`: bố cục, F1, tab/chữ rộng, cảnh báo, dán một bước undo,
   click chuột, chỉ đọc, `NO_COLOR`, terminal 12×2). `scripts/screenshots.py` dùng cùng cơ chế để chụp ảnh cho README.
+
+## ADR-016 – Kiểm tra tĩnh, phiên bản, changelog
+
+- **ruff** (lint) với bộ luật E/W/F/I/UP/B/SIM/RUF khai báo trong `pyproject.toml`; **không** dùng formatter vì mã
+  căn cột chú thích cuối dòng có chủ ý (formatter sẽ phá). Test và script benchmark được nới vài luật kiểu viết gọn
+  (nhiều lệnh một dòng…); mã thư viện thì không. Hai chỗ `noqa` trong `src/` đều ghi lý do.
+- **mypy** trên `src/splaypad` (`check_untyped_defs`). Riêng `splay_rope`/`treap_rope` tắt các lỗi thu hẹp kiểu
+  `Node | None` trong vòng lặp duyệt cây: bất biến (kiểm bằng `check_invariants` + differential/stateful test) bảo
+  đảm node khác None, và thêm `assert`/`cast` vào đúng các vòng lặp benchmark đang đo là không chấp nhận được.
+- `make lint` chạy cả hai; CI có job `lint` riêng, song song với `test`.
+- **Phiên bản** một nguồn: `splaypad.__version__` (pyproject đọc qua `tool.setuptools.dynamic`); thay đổi ghi trong
+  `CHANGELOG.md` theo Keep a Changelog.

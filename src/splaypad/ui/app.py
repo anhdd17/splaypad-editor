@@ -7,6 +7,7 @@ Mã thoát của ``run``: 0 bình thường, 1 lỗi không lường trước, 1
 SIGHUP / SIGINT. Thoát bất thường mà còn thay đổi chưa lưu thì ghi file khôi phục trước (ADR-014).
 """
 
+import contextlib
 import curses
 import logging
 import os
@@ -19,7 +20,8 @@ from ..editor import clipboard, display
 from ..editor.editor import Editor
 from ..editor.trace import TracingBuffer
 from . import theme as themes
-from .debug import WIDTH as PANEL_W, DebugPanel
+from .debug import WIDTH as PANEL_W
+from .debug import DebugPanel
 from .keys import HELP, HINTS, QUIT, handle_key, handle_mouse, prompt_label, prompt_text
 
 log = logging.getLogger(__name__)
@@ -49,10 +51,11 @@ def key_name(key) -> str:
 
 
 def human_size(n: int) -> str:
+    x = float(n)
     for unit in ("B", "KB", "MB", "GB"):
-        if n < 1024 or unit == "GB":
-            return f"{n} {unit}" if unit == "B" else f"{n:.1f} {unit}"
-        n /= 1024
+        if x < 1024 or unit == "GB":
+            return f"{n} {unit}" if unit == "B" else f"{x:.1f} {unit}"
+        x /= 1024
     raise AssertionError
 
 
@@ -78,17 +81,13 @@ def status_parts(ed: Editor, kind: str, policy: str, line: int, col: int) -> tup
 def _put(scr, y: int, x: int, text: str, n: int, attr: int = 0) -> None:
     """addnstr bỏ qua lỗi ghi vào ô cuối màn hình (curses báo lỗi dù đã vẽ xong)."""
     if n > 0:
-        try:
+        with contextlib.suppress(curses.error):         # ô cuối màn hình: curses báo lỗi dù đã vẽ xong
             scr.addnstr(y, x, text, n, attr)
-        except curses.error:
-            pass
 
 
 def _cursor(visible: bool) -> None:
-    try:
+    with contextlib.suppress(curses.error):             # terminal không hỗ trợ ẩn cursor
         curses.curs_set(1 if visible else 0)
-    except curses.error:                                # terminal không hỗ trợ ẩn cursor
-        pass
 
 
 def _fill(scr, y: int, w: int, attr: int) -> None:
@@ -120,7 +119,7 @@ def draw_help(scr, th: dict, h: int, w: int) -> None:
         keyw = max(display.width(k) for _, items in sections for k, _ in items) + 3
         y = 2
         for name, items in sections:
-            rows = [(name, None)] + items + [("", "")]
+            rows = [(name, None), *items, ("", "")]
             for k, desc in rows:
                 if y >= h - 1:
                     overflow = True
@@ -141,10 +140,10 @@ def _bottom_line(scr, y: int, w: int, ed: Editor, state: dict, th: dict) -> int 
     """Dòng cuối: ô nhập, thông báo hoặc gợi ý phím. Trả về cột cursor nếu đang ở ô nhập."""
     label = prompt_label(state, ed)
     if label is not None:
-        text = prompt_text(state)
+        text = prompt_text(state) or ""
         _put(scr, y, 0, label, w, th["prompt"])
         lw = display.width(label)
-        shown, tw = display.clip(text, max(0, display.width(text) - (w - lw - 2)), w - lw - 1)
+        shown, _ = display.clip(text, max(0, display.width(text) - (w - lw - 2)), w - lw - 1)
         _put(scr, y, lw, shown, w - lw)
         return min(w - 1, lw + display.width(shown))
     if ed.message:
@@ -191,15 +190,13 @@ def draw(scr, ed: Editor, kind: str, policy: str, state: dict, panel: DebugPanel
         else:
             _put(scr, i, max(0, gutter - 2), "~", 1, th["eof"])
     for row, x0, x1 in ed.selection_spans(text_h, text_w):
-        try:
+        with contextlib.suppress(curses.error):
             scr.chgat(row, gutter + x0, x1 - x0, th["selection"])
-        except curses.error:
-            pass
     if show_panel:
         for i in range(text_h):
             _put(scr, i, area_w, "│", 1, th["gutter"])
-        for i, row in enumerate(panel.lines()[:text_h]):
-            _put(scr, i, area_w + 1, row, PANEL_W)
+        for i, panel_row in enumerate(panel.lines()[:text_h]):
+            _put(scr, i, area_w + 1, panel_row, PANEL_W)
 
     name, flags, right = status_parts(ed, kind, policy, line, col)
     sy = h - bars
@@ -309,7 +306,7 @@ def run(path: str, kind: str = "splay", record: str | None = None, log_file=None
         ed.message = f"Mở trong {ed.open_seconds:.2f}s" + (f", đang ghi trace {record}" if record else "") + \
             " – F1: trợ giúp"
     old = {s: signal.signal(s, _on_signal) for s in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT)}
-    code, reason = 0, None
+    code, reason = 0, ""
     try:
         curses.wrapper(loop, ed, kind, opts.get("policy", "full"), mouse=mouse, numbers=line_numbers)
     except Terminated as e:

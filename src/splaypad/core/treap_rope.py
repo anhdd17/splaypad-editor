@@ -9,7 +9,7 @@ nên an toàn với giới hạn đệ quy của Python. Các thao tác khác vi
 """
 
 import random
-from typing import Iterator
+from collections.abc import Iterator
 
 from .buffer import Stats, TextBuffer
 
@@ -19,7 +19,8 @@ class Node:
 
     def __init__(self, chunk: bytes, prio: float):
         self.chunk = chunk
-        self.left = self.right = None
+        self.left: Node | None = None
+        self.right: Node | None = None
         self.prio = prio
         self.own_nl = chunk.count(b"\n")
         self.size = len(chunk)

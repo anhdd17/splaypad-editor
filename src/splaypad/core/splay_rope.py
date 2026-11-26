@@ -17,7 +17,7 @@ Mọi thao tác duyệt cây đều viết bằng vòng lặp: cây splay có th
 """
 
 import random
-from typing import Iterator
+from collections.abc import Iterator
 
 from .buffer import Stats, TextBuffer
 
@@ -29,7 +29,9 @@ class Node:
 
     def __init__(self, chunk: bytes):
         self.chunk = chunk
-        self.left = self.right = self.parent = None
+        self.left: Node | None = None
+        self.right: Node | None = None
+        self.parent: Node | None = None
         self.own_nl = chunk.count(b"\n")    # lưu sẵn để _update là O(1)
         self.size = len(chunk)              # tổng byte trong cây con
         self.nl = self.own_nl               # tổng '\n' trong cây con

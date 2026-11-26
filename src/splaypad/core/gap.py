@@ -10,7 +10,7 @@ toàn bộ text bằng ``count`` theo khối (chạy ở tốc độ C nhưng v�
 ``chunk`` được dùng làm kích thước gap tối thiểu khi cấp lại mảng.
 """
 
-from typing import Iterator
+from collections.abc import Iterator
 
 from .buffer import Stats, TextBuffer, nth_newline
 

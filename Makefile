@@ -2,7 +2,7 @@ PYTHON ?= python3.12
 VENV   ?= .venv
 PY     := $(VENV)/bin/python
 
-.PHONY: venv install test difftest spike bench plots diagrams report report-docx run record clean
+.PHONY: venv install lint test difftest spike bench plots diagrams report report-docx run record clean
 
 venv:
 	test -x $(PY) || $(PYTHON) -m venv $(VENV)
@@ -11,6 +11,10 @@ install: venv
 	$(PY) -m pip install -q --upgrade pip
 	$(PY) -m pip install -q -e ".[dev,bench]"
 	$(PY) -m pip freeze --exclude-editable > requirements-lock.txt
+
+lint:              # ruff (lint) + mypy (kiểu) – CI chạy cùng test
+	$(PY) -m ruff check .
+	$(PY) -m mypy
 
 test:              # nhanh, dùng cho CI: coverage trên test thường + differential 100 seed
 	SPLAYPAD_CHECK=1 $(PY) -m pytest -n auto --cov=splaypad --ignore=tests/test_differential.py

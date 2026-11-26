@@ -9,7 +9,8 @@ import logging
 import platform
 import sys
 
-from . import __version__, log as applog
+from . import __version__
+from . import log as applog
 from .core import BUFFERS, DEFAULT_CHUNK, POLICIES
 
 log = logging.getLogger("splaypad")
@@ -66,7 +67,7 @@ def main(argv=None) -> int:
     log.info("start version=%s python=%s platform=%s", __version__, platform.python_version(), platform.platform())
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
         return fail("cần chạy trong terminal (stdin/stdout không phải tty)")
-    from .ui.app import run    # import muộn: parse_args dùng được cả khi không có curses
+    from .ui.app import run  # import muộn: parse_args dùng được cả khi không có curses
 
     try:
         return run(args.file, args.buffer, record=args.record, log_file=log_file, mouse=args.mouse,

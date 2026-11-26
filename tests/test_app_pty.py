@@ -71,7 +71,7 @@ def test_edit_select_clipboard_save(tmp_path, buffer):
             CTRL_S, CTRL_Q]
     code, screen = run_app(p, keys, f"--buffer={buffer}")
     assert code == 0
-    assert p.read_bytes() == "one twoone!\n\n".encode()
+    assert p.read_bytes() == b"one twoone!\n\n"
 
 
 # curses chỉ vẽ lại phần thay đổi, nên chữ trên màn hình không đáng tin để assert; kiểm bằng hiệu ứng lên file.

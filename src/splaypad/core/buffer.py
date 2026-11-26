@@ -14,8 +14,8 @@ Quy ước dùng cho mọi cài đặt (xem docs/decisions.md, ADR-003):
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 from dataclasses import asdict, dataclass
-from typing import Iterator
 
 
 @dataclass
@@ -74,7 +74,7 @@ class TextBuffer(ABC):
         """Bộ đếm cộng dồn (O(1)). ``full=False`` bỏ qua ``nodes``/``height`` vốn có thể tốn O(n) để tính."""
 
     # --- Tiện ích chung ---
-    def check_invariants(self) -> None:
+    def check_invariants(self) -> None:  # noqa: B027 – hook tuỳ chọn, cài đặt không có bất biến thì giữ mặc định
         """Kiểm tra bất biến nội bộ (ném AssertionError nếu sai). Mặc định: không có gì để kiểm."""
 
     def to_bytes(self) -> bytes:

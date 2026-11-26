@@ -18,8 +18,9 @@ Thao tác ném ngoại lệ không được ghi.
 
 import ast
 import hashlib
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
-from typing import IO, Iterable, Iterator
+from typing import IO
 
 from ..core import Stats, TextBuffer
 

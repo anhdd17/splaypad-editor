@@ -1,6 +1,16 @@
 name: ci
 on: [push, pull_request]
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: make install PYTHON=python
+      - run: make lint
   test:
     # Chỉ chạy Ubuntu: máy macOS của GitHub hay không có sẵn, job bị huỷ vì không có máy nhận
     # và làm cả lượt CI đỏ dù code không lỗi. macOS được kiểm bằng `make test` trên máy phát triển.

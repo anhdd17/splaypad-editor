@@ -5,7 +5,7 @@ import pytest
 pytest.importorskip("pty")
 pytest.importorskip("pyte")
 
-from ptyterm import PtyApp  # noqa: E402
+from ptyterm import PtyApp
 
 DOWN, F1, F4, CTRL_F, CTRL_Q, CTRL_S, CTRL_Z = "\x1bOB", "\x1bOP", "\x1bOS", "\x06", "\x11", "\x13", "\x1a"
 ESC, ENTER = "\x1b", "\r"

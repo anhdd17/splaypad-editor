@@ -7,8 +7,8 @@ nên lỗi nào cũng tái hiện được chỉ bằng seed (hoặc bằng lệ
 import os
 import random
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from splaypad.core import NaiveBuffer, TextBuffer, make_buffer
 
@@ -95,7 +95,7 @@ def apply(op: Op, buf: TextBuffer):
     try:
         out = getattr(buf, op.name)(*op.args)
         return b"".join(out) if op.name == "iter_chunks" else out
-    except Exception as e:      # noqa: BLE001 – crash của buffer cũng phải lộ ra như một khác biệt
+    except Exception as e:
         return ("raise", type(e).__name__)
 
 
@@ -105,7 +105,7 @@ def replay(make: Maker, chunk: int, init: bytes, ops: list[Op]) -> Failure | Non
     check_every = int(os.environ.get("SPLAYPAD_CHECK_EVERY", "1"))   # check_invariants là O(n)
     try:
         a = make(init, chunk)
-    except Exception as e:      # noqa: BLE001
+    except Exception as e:
         return Failure(-1, None, ("raise", type(e).__name__), "build")
     b = NaiveBuffer(init)
     for i, op in enumerate(ops):

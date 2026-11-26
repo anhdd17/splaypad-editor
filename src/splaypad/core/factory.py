@@ -4,7 +4,7 @@
     make_buffer("splay", data, chunk=1024, policy="full")
 """
 
-from typing import Callable
+from collections.abc import Callable
 
 from .buffer import TextBuffer
 from .gap import GapBuffer

@@ -4,9 +4,9 @@
 """
 
 import shutil
-import unicodedata
 import sys
 import tempfile
+import unicodedata
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont

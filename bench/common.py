@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from spike_build import MB, gen_file, peak_rss_mb   # noqa: F401  (dùng lại từ spike tuần 1)
+from spike_build import MB, gen_file, peak_rss_mb  # noqa: F401  (dùng lại từ spike tuần 1)
 
 ROOT = Path(__file__).resolve().parent
 REPO = ROOT.parent

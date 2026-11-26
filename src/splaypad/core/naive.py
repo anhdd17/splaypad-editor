@@ -3,7 +3,7 @@
 Không tối ưu: ``line_to_offset`` là O(n). Mọi cài đặt khác phải cho kết quả giống hệt.
 """
 
-from typing import Iterator
+from collections.abc import Iterator
 
 from .buffer import Stats, TextBuffer
 

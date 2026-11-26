@@ -4,18 +4,21 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "splaypad"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Text editor cho file lớn dựa trên rope cài bằng implicit splay tree"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-xdist>=3", "pytest-cov>=5", "hypothesis>=6", "pyte>=0.8"]
+dev = ["pytest>=8", "pytest-xdist>=3", "pytest-cov>=5", "hypothesis>=6", "pyte>=0.8", "ruff>=0.6", "mypy>=1.10"]
 bench = ["pandas>=2", "matplotlib>=3.8"]
 
 [project.scripts]
 splaypad = "splaypad.__main__:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "splaypad.__version__"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -27,3 +30,41 @@ addopts = "-q"
 [tool.coverage.run]
 source = ["splaypad"]
 branch = true
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["report/diagrams"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = [
+    "E501",     # chú thích cuối dòng được căn cột; độ dài dòng kiểm khi review, không dùng formatter
+    "E731",     # lambda trong bảng phím (ui/keys.py) đọc rõ hơn def
+    "SIM108",   # if/else nhiều nhánh đọc rõ hơn toán tử ba ngôi lồng nhau
+    "E741",     # l / r = con trái / phải trong mã cây: quy ước của tài liệu cấu trúc dữ liệu
+    "RUF023",   # __slots__ xếp theo ý nghĩa (chunk, con trỏ, augment), không theo bảng chữ cái
+    "RUF001", "RUF002", "RUF003",   # chữ tiếng Việt / ký hiệu Unicode trong chuỗi và chú thích là cố ý
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["splaypad"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src/splaypad"]
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+
+[tool.ruff.lint.per-file-ignores]
+# test và script benchmark viết gọn (nhiều lệnh một dòng, giải nén bỏ bớt) có chủ ý; mã thư viện thì không
+"tests/*" = ["E702", "RUF005", "RUF059", "B007", "B905", "SIM115", "RUF007"]
+"bench/*" = ["E702", "RUF005", "RUF059", "B905"]
+
+[[tool.mypy.overrides]]
+# Vòng lặp duyệt cây: bất biến (kiểm bằng check_invariants + differential/stateful test) bảo đảm node khác None.
+# Không thêm assert/cast vào đường nóng chỉ để thu hẹp kiểu – benchmark đo chính các vòng lặp này (ADR-016).
+module = ["splaypad.core.splay_rope", "splaypad.core.treap_rope"]
+disable_error_code = ["union-attr", "arg-type", "assignment", "return-value"]

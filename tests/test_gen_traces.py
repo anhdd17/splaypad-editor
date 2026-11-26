@@ -6,11 +6,11 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "bench"))
-from gen_traces import KINDS, generate  # noqa: E402
+from gen_traces import KINDS, generate
 
-from splaypad.core import NaiveBuffer  # noqa: E402
-from splaypad.editor import read_trace, replay  # noqa: E402
-from splaypad.editor.trace import check_base  # noqa: E402
+from splaypad.core import NaiveBuffer
+from splaypad.editor import read_trace, replay
+from splaypad.editor.trace import check_base
 
 BASE = b"".join(b"line %d of the base file\n" % i for i in range(3000))
 
