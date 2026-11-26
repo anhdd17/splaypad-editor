@@ -33,6 +33,10 @@ không làm hỏng file cũ.
 | Home / End, Ctrl-A / Ctrl-E | đầu / cuối dòng |
 | PgUp / PgDn | cuộn một trang |
 | Backspace / Delete / Enter / Tab | sửa |
+| Shift+mũi tên, Shift+Home/End | chọn vùng (mũi tên thường thì bỏ chọn) |
+| Ctrl-Space | đặt / bỏ mark – chọn kiểu Emacs, vùng chọn giữ khi di chuyển (dùng khi terminal không gửi Shift+mũi tên) |
+| Esc / Ctrl-G | bỏ chọn |
+| Ctrl-C / Ctrl-X / Ctrl-V | copy / cut / paste (clipboard nội bộ); gõ hoặc dán khi đang chọn thì thay vùng chọn |
 | Ctrl-Z / Ctrl-Y | undo / redo (gõ liền nhau được gộp theo từ) |
 | Ctrl-S | lưu |
 | Ctrl-Q | thoát (bấm hai lần nếu chưa lưu) |

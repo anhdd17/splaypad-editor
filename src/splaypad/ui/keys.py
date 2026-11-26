@@ -4,6 +4,10 @@
 |------------------------------|------------------------------|
 | ← → ↑ ↓, Home/End, PgUp/PgDn | di chuyển (Ctrl-A/Ctrl-E = đầu/cuối dòng) |
 | Backspace, Delete, Enter, Tab| sửa                          |
+| Shift+← → ↑ ↓ / Home / End   | chọn vùng                    |
+| Ctrl-Space                   | đặt / bỏ mark (chọn kiểu Emacs, giữ khi di chuyển) |
+| Esc, Ctrl-G                  | bỏ chọn                      |
+| Ctrl-C / Ctrl-X / Ctrl-V     | copy / cut / paste           |
 | Ctrl-Z / Ctrl-Y              | undo / redo                  |
 | Ctrl-S                       | lưu                          |
 | Ctrl-Q                       | thoát (bấm hai lần nếu chưa lưu) |
@@ -13,7 +17,9 @@ import curses
 
 from ..editor.editor import Editor
 
-CTRL_A, CTRL_E, CTRL_Q, CTRL_S, CTRL_Y, CTRL_Z = 1, 5, 17, 19, 25, 26
+CTRL_SPACE, CTRL_A, CTRL_C, CTRL_E, CTRL_G, CTRL_Q, CTRL_S, CTRL_V, CTRL_X, CTRL_Y, CTRL_Z = (
+    0, 1, 3, 5, 7, 17, 19, 22, 24, 25, 26)
+ESC = 27
 BACKSPACE = (curses.KEY_BACKSPACE, 127, 8)
 ENTER = (10, 13, curses.KEY_ENTER)
 QUIT = "quit"
@@ -33,24 +39,34 @@ def handle_key(ed: Editor, key: int | str, height: int, state: dict) -> str | No
     """
     key = normalize(key)
     confirm_quit = state.pop("confirm_quit", False)
+    page = max(1, height - 1)
+    moves = {
+        curses.KEY_LEFT: ed.left_char, curses.KEY_RIGHT: ed.right_char,
+        curses.KEY_UP: lambda: ed.vertical(-1), curses.KEY_DOWN: lambda: ed.vertical(1),
+        curses.KEY_HOME: ed.home, CTRL_A: ed.home, curses.KEY_END: ed.end, CTRL_E: ed.end,
+        curses.KEY_PPAGE: lambda: ed.scroll(-page, height), curses.KEY_NPAGE: lambda: ed.scroll(page, height),
+    }
+    shift_moves = {
+        curses.KEY_SLEFT: ed.left_char, curses.KEY_SRIGHT: ed.right_char,
+        curses.KEY_SR: lambda: ed.vertical(-1), curses.KEY_SF: lambda: ed.vertical(1),
+        curses.KEY_SHOME: ed.home, curses.KEY_SEND: ed.end,
+    }
     if isinstance(key, str):
         ed.insert_text(key.encode("utf-8"))
-    elif key == curses.KEY_LEFT:
-        ed.left_char()
-    elif key == curses.KEY_RIGHT:
-        ed.right_char()
-    elif key == curses.KEY_UP:
-        ed.vertical(-1)
-    elif key == curses.KEY_DOWN:
-        ed.vertical(1)
-    elif key in (curses.KEY_HOME, CTRL_A):
-        ed.home()
-    elif key in (curses.KEY_END, CTRL_E):
-        ed.end()
-    elif key == curses.KEY_PPAGE:
-        ed.scroll(-max(1, height - 1), height)
-    elif key == curses.KEY_NPAGE:
-        ed.scroll(max(1, height - 1), height)
+    elif key in moves:
+        ed.plain_move(moves[key])
+    elif key in shift_moves:
+        ed.extend_selection(shift_moves[key])
+    elif key == CTRL_SPACE:
+        ed.toggle_mark()
+    elif key in (ESC, CTRL_G):
+        ed.cancel_selection()
+    elif key == CTRL_C:
+        ed.copy()
+    elif key == CTRL_X:
+        ed.cut()
+    elif key == CTRL_V:
+        ed.paste()
     elif key in BACKSPACE:
         ed.backspace()
     elif key == curses.KEY_DC:

@@ -88,3 +88,27 @@ class DeleteCmd(Command):
             return False
         self.length = len(self.removed)
         return True
+
+
+@dataclass
+class GroupCmd(Command):
+    """Nhiều command thành một bước undo (ví dụ: xoá vùng chọn rồi dán đè). Không gộp với gì khác."""
+
+    cmds: list[Command]
+
+    def execute(self, buf: TextBuffer) -> int:
+        cursor = 0
+        for i, c in enumerate(self.cmds):
+            try:
+                cursor = c.execute(buf)
+            except BaseException:
+                for done in reversed(self.cmds[:i]):        # lỗi giữa chừng: trả buffer về như cũ
+                    done.undo(buf)
+                raise
+        return cursor
+
+    def undo(self, buf: TextBuffer) -> int:
+        cursor = 0
+        for c in reversed(self.cmds):
+            cursor = c.undo(buf)
+        return cursor

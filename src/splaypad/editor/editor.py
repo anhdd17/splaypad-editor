@@ -4,6 +4,8 @@
 - Cột hiển thị = số ký tự (code point) từ đầu dòng; tab hiển thị như một ô. Ký tự rộng (CJK, emoji)
   chiếm 2 ô trên terminal nhưng vẫn tính 1 cột – giới hạn đã biết, ghi trong README.
 - Mọi thay đổi nội dung đi qua ``UndoManager``; di chuyển cursor thì ``seal()`` nhóm undo.
+- Vùng chọn = [mark, cursor). Mark đặt kiểu Emacs (giữ khi di chuyển) hoặc bằng Shift+mũi tên (mũi tên
+  thường thì bỏ chọn). Gõ / dán khi đang chọn thì thay vùng chọn, gộp thành một bước undo.
 - Render chỉ đọc các dòng trong viewport (``line_to_offset`` + ``substr``) – liên quan trực tiếp RQ4.
 """
 
@@ -11,7 +13,7 @@ import os
 import tempfile
 
 from ..core import TextBuffer, make_buffer
-from .commands import DeleteCmd, InsertCmd
+from .commands import DeleteCmd, GroupCmd, InsertCmd, PasteCmd
 from .undo import UndoManager
 
 MAX_LINE_READ = 1 << 16     # dòng dài hơn chỉ đọc chừng này byte để render / tính cột
@@ -33,6 +35,10 @@ class Editor:
         self.left = 0                       # cột đầu viewport (cuộn ngang)
         self.dirty = False
         self.message = ""
+        self.mark: int | None = None
+        self._shift_sel = False             # vùng chọn tạo bằng Shift+mũi tên
+        self.clipboard = b""
+        self.row_lens: list[int] = []      # số ký tự của từng dòng ở lần visible_lines gần nhất
 
     @classmethod
     def open(cls, path: str, kind: str = "splay", **opts) -> "Editor":
@@ -137,26 +143,131 @@ class Editor:
         """line đếm từ 0; kẹp vào phạm vi hợp lệ."""
         self._move_to(self.line_start(max(0, min(line, self.buf.line_count() - 1))))
 
+    # ================================================================ vùng chọn
+
+    def selection(self) -> tuple[int, int] | None:
+        """[start, end) đang chọn, hoặc None nếu không chọn gì."""
+        if self.mark is None or self.mark == self.cursor:
+            return None
+        return min(self.mark, self.cursor), max(self.mark, self.cursor)
+
+    def toggle_mark(self) -> None:
+        """Ctrl-Space: đặt mark tại cursor, bấm lần nữa để bỏ."""
+        if self.mark is None or self._shift_sel:
+            self.mark, self.message = self.cursor, "Đặt mark"
+        else:
+            self.mark, self.message = None, "Bỏ mark"
+        self._shift_sel = False
+
+    def cancel_selection(self) -> None:
+        self.mark, self._shift_sel = None, False
+
+    def extend_selection(self, move) -> None:
+        """Shift+di chuyển: bắt đầu chọn tại cursor nếu chưa chọn, rồi di chuyển."""
+        if self.mark is None:
+            self.mark, self._shift_sel = self.cursor, True
+        move()
+
+    def plain_move(self, move) -> None:
+        """Di chuyển thường: bỏ vùng chọn kiểu Shift, giữ mark kiểu Emacs."""
+        if self._shift_sel:
+            self.cancel_selection()
+        move()
+
+    def selection_spans(self, height: int, width: int) -> list[tuple[int, int, int]]:
+        """Phần cần tô của từng hàng màn hình: (hàng, x0, x1), toạ độ màn hình, đã cắt theo cuộn ngang.
+
+        Dòng nằm trọn trong vùng chọn được tô tới hết text cộng một ô cho '\\n'; độ dài dòng lấy từ
+        ``row_lens`` của lần ``visible_lines`` gần nhất (gọi nó trước, như khi vẽ màn hình).
+        """
+        sel = self.selection()
+        if sel is None:
+            return []
+        s, e = sel
+        sl, el = self.line_of(s), self.line_of(e)
+        sc, ec = self._col_of(self.line_start(sl), s), self._col_of(self.line_start(el), e)
+        spans = []
+        for line in range(max(sl, self.top), min(el, self.top + height - 1) + 1):
+            row = line - self.top
+            if line == el:
+                end = ec
+            else:
+                end = (self.row_lens[row] if row < len(self.row_lens) else 0) + 1
+            x0 = max(0, (sc if line == sl else 0) - self.left)
+            x1 = min(width, end - self.left)
+            if x1 > x0:
+                spans.append((row, x0, x1))
+        return spans
+
+    def copy(self) -> None:
+        sel = self.selection()
+        if sel is None:
+            self.message = "Chưa chọn gì"
+            return
+        self.clipboard = self.buf.substr(sel[0], sel[1] - sel[0])
+        self.cancel_selection()
+        self.message = f"Đã copy {len(self.clipboard)} byte"
+
+    def cut(self) -> None:
+        sel = self.selection()
+        if sel is None:
+            self.message = "Chưa chọn gì"
+            return
+        self.clipboard = self.buf.substr(sel[0], sel[1] - sel[0])
+        self._apply(DeleteCmd(sel[0], sel[1] - sel[0]), alone=True)
+        self.message = f"Đã cut {len(self.clipboard)} byte"
+
+    def paste(self) -> None:
+        if not self.clipboard:
+            self.message = "Clipboard trống"
+            return
+        self._replace_selection(PasteCmd, self.clipboard, alone=True)
+
     # ================================================================ sửa
 
-    def _apply(self, cmd) -> None:
+    def _apply(self, cmd, *, alone: bool = False) -> None:
+        """Chạy cmd qua UndoManager. alone: luôn là một bước undo riêng, không gộp trước/sau."""
+        if alone:
+            self.undo_mgr.seal()
         self.cursor = self.undo_mgr.do(cmd)
+        if alone:
+            self.undo_mgr.seal()
         self.goal_col = None
         self.dirty = True
+        self.cancel_selection()
+
+    def _replace_selection(self, cls, data: bytes, *, alone: bool = False) -> None:
+        sel = self.selection()
+        if sel is None:
+            self._apply(cls(self.cursor, data), alone=alone)
+            return
+        s, e = sel
+        self._apply(GroupCmd([DeleteCmd(s, e - s), cls(s, data)]), alone=True)
+
+    def _delete_selection(self) -> bool:
+        sel = self.selection()
+        if sel is None:
+            return False
+        self._apply(DeleteCmd(sel[0], sel[1] - sel[0]), alone=True)
+        return True
 
     def insert_text(self, data: bytes) -> None:
         if data:
-            self._apply(InsertCmd(self.cursor, data))
+            self._replace_selection(InsertCmd, data)
 
     def newline(self) -> None:
         self.insert_text(b"\n")
 
     def backspace(self) -> None:
+        if self._delete_selection():
+            return
         if self.cursor > 0:
             start = self._prev_char(self.cursor)        # xoá trọn ký tự UTF-8 đứng trước
             self._apply(DeleteCmd(start, self.cursor - start, backspace=True))
 
     def delete(self) -> None:
+        if self._delete_selection():
+            return
         if self.cursor < len(self.buf):
             end = self._next_char(self.cursor)
             self._apply(DeleteCmd(self.cursor, end - self.cursor))
@@ -167,6 +278,7 @@ class Editor:
             self.message = "Không còn gì để undo"
             return
         self.cursor, self.goal_col, self.dirty = pos, None, True
+        self.cancel_selection()
 
     def redo(self) -> None:
         pos = self.undo_mgr.redo()
@@ -174,6 +286,7 @@ class Editor:
             self.message = "Không còn gì để redo"
             return
         self.cursor, self.goal_col, self.dirty = pos, None, True
+        self.cancel_selection()
 
     # ================================================================ lưu
 
@@ -222,6 +335,7 @@ class Editor:
         # Một lần line_to_offset cho dòng đầu, sau đó đọc tuần tự từng khối bằng substr: với buffer
         # không có chỉ mục dòng (gap, piece), mỗi line_to_offset là O(n), không thể gọi cho từng dòng.
         out: list[str] = []
+        self.row_lens = []
         n, n_lines = len(self.buf), self.buf.line_count()
         line, pos, pending = self.top, self.line_start(self.top), b""
         while len(out) < height and line < n_lines:
@@ -238,6 +352,7 @@ class Editor:
                 if line + 1 < n_lines:
                     pos = self.line_start(line + 1)
             text = raw.decode("utf-8", errors="replace").replace("\t", " ")
+            self.row_lens.append(len(text))
             out.append(text[self.left : self.left + width])
             line += 1
         return out

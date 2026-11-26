@@ -13,6 +13,11 @@ def status_line(ed: Editor, kind: str, policy: str) -> str:
     name = os.path.basename(ed.path) if ed.path else "[mới]"
     parts = [f"{name}{' *' if ed.dirty else ''}", f"Ln {line + 1}/{ed.buf.line_count()}, Col {col + 1}",
              f"{len(ed.buf)} B", f"{kind}/{policy}" if kind == "splay" else kind]
+    sel = ed.selection()
+    if sel is not None:
+        parts.append(f"Chọn {sel[1] - sel[0]} B")
+    elif ed.mark is not None:
+        parts.append("Mark")
     if ed.message:
         parts.append(ed.message)
     return " | ".join(parts)
@@ -23,8 +28,11 @@ def draw(scr, ed: Editor, kind: str, policy: str) -> None:
     text_h = max(1, h - 1)
     ed.scroll_to_cursor(text_h, w)
     scr.erase()
-    for i, text in enumerate(ed.visible_lines(text_h, w)):
+    rows = ed.visible_lines(text_h, w)
+    for i, text in enumerate(rows):
         scr.addnstr(i, 0, text, w)
+    for row, x0, x1 in ed.selection_spans(text_h, w):
+        scr.chgat(row, x0, x1 - x0, curses.A_REVERSE)
     scr.addnstr(h - 1, 0, status_line(ed, kind, policy).ljust(w - 1), w - 1, curses.A_REVERSE)
     line, col = ed.cursor_line_col()
     scr.move(min(line - ed.top, text_h - 1), min(col - ed.left, w - 1))

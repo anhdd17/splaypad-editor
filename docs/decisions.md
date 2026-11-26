@@ -123,3 +123,17 @@ Mỗi quyết định ghi: bối cảnh, lựa chọn, lý do, hệ quả. Số 
   mới `find` trong khối đích. Vẫn O(n) nhưng chạy ở tốc độ C, để baseline không chậm một cách giả tạo.
 - **Đo nhanh trên file 100MB** (`-O`, Apple Silicon): mở file splay 0,16–0,38s (đạt tiêu chí < 3s);
   nhảy tới giữa file + render 40 dòng: splay/treap ~0,1ms, piece ~130ms, gap ~350ms.
+
+## ADR-009 – Vùng chọn và clipboard (slice S3)
+
+- **Hai cách chọn:** Shift+mũi tên (mũi tên thường bỏ chọn) và mark kiểu Emacs bằng Ctrl-Space (giữ khi di chuyển),
+  vì không phải terminal nào cũng gửi được Shift+mũi tên.
+- **Undo:** cut và paste luôn là một bước undo riêng (`seal` trước và sau), không gộp với Delete/gõ phím kề bên.
+  Gõ hoặc dán khi đang chọn = `GroupCmd([DeleteCmd, InsertCmd/PasteCmd])`, một bước undo; `GroupCmd` lỗi giữa
+  chừng thì hoàn tác phần đã chạy. Undo/redo bỏ vùng chọn.
+- **Clipboard nội bộ** (`bytes`), chưa nối với clipboard hệ điều hành.
+- **Tô vùng chọn:** `selection_spans` trả toạ độ màn hình đã cắt theo cuộn ngang; độ dài dòng lấy từ lần
+  `visible_lines` vừa vẽ nên không tra dòng thêm lần nào.
+- **Test end-to-end:** `tests/test_app_pty.py` chạy app thật trong pseudo-terminal (`openpty` + `subprocess`,
+  không dùng `pty.fork` vì fork trong worker nhiều luồng của xdist có thể deadlock) và kiểm *nội dung file* sau khi
+  lưu – curses chỉ vẽ lại phần thay đổi nên chữ trên màn hình không dùng để assert được.
