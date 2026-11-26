@@ -34,6 +34,12 @@ def parse_args(argv=None):
     p = argparse.ArgumentParser(prog="splaypad", description=__doc__.split("\n\n")[0], epilog=EPILOG)
     p.add_argument("file", help="file cần mở (chưa tồn tại thì tạo khi lưu)")
     p.add_argument("-V", "--version", action="version", version=f"%(prog)s {__version__}")
+    g = p.add_argument_group("hiển thị")
+    g.add_argument("-R", "--read-only", action="store_true", help="mở ở chế độ chỉ đọc")
+    g.add_argument("--tab-width", type=_positive_int, default=4, metavar="N", help="độ rộng tab (mặc định: 4)")
+    g.add_argument("--no-line-numbers", dest="line_numbers", action="store_false", help="ẩn cột số dòng (F4)")
+    g.add_argument("--no-mouse", dest="mouse", action="store_false",
+                   help="không bắt chuột (để chọn chữ bằng chuột của terminal)")
     g = p.add_argument_group("cấu trúc dữ liệu")
     g.add_argument("--buffer", choices=BUFFERS, default="splay", help="cài đặt TextBuffer (mặc định: splay)")
     g.add_argument("--chunk", type=_positive_int, default=DEFAULT_CHUNK, metavar="BYTES",
@@ -63,7 +69,8 @@ def main(argv=None) -> int:
     from .ui.app import run    # import muộn: parse_args dùng được cả khi không có curses
 
     try:
-        return run(args.file, args.buffer, record=args.record, log_file=log_file,
+        return run(args.file, args.buffer, record=args.record, log_file=log_file, mouse=args.mouse,
+                   line_numbers=args.line_numbers, read_only=args.read_only, tab_width=args.tab_width,
                    chunk=args.chunk, policy=args.policy, splay_p=args.splay_p)
     except OSError as e:                                # mở file / file trace thất bại, trước khi vào curses
         log.error("open failed: %s", e)

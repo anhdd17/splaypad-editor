@@ -1,8 +1,8 @@
 """Mô hình editor: cursor, viewport, sửa, lưu – không phụ thuộc curses để test được.
 
 - Cursor là offset byte, luôn nằm trên ranh giới ký tự UTF-8. Dòng/cột tính khi cần.
-- Cột hiển thị = số ký tự (code point) từ đầu dòng; tab hiển thị như một ô. Ký tự rộng (CJK, emoji)
-  chiếm 2 ô trên terminal nhưng vẫn tính 1 cột – giới hạn đã biết, ghi trong README.
+- Cột = cột hiển thị trên terminal (``display.py``): tab nhảy tới tab stop, ký tự rộng (CJK, emoji) 2 ô,
+  dấu kết hợp 0 ô. Đi lên/xuống giữ cột hiển thị, nên cursor thẳng hàng với những gì nhìn thấy.
 - Lưu: ghi file tạm rồi ``os.replace``; từ chối ghi đè nếu file trên đĩa đã đổi từ lúc mở / lưu lần trước
   (``FileChangedError``, gọi lại với ``force=True`` để ghi đè). App lỗi giữa chừng thì ``write_recovery``.
 - Mọi thay đổi nội dung đi qua ``UndoManager``; di chuyển cursor thì ``seal()`` nhóm undo.
@@ -18,6 +18,7 @@ import time
 from pathlib import Path
 
 from ..core import TextBuffer, make_buffer
+from . import display
 from .commands import DeleteCmd, GroupCmd, InsertCmd, PasteCmd
 from .trace import TracingBuffer
 from .undo import UndoManager
@@ -53,9 +54,12 @@ def _is_cont(b: int) -> bool:
 
 
 class Editor:
-    def __init__(self, buf: TextBuffer, path: str | None = None):
+    def __init__(self, buf: TextBuffer, path: str | None = None, *, tab_width: int = display.DEFAULT_TAB,
+                 read_only: bool = False):
         self.buf = buf
         self.path = path
+        self.tab_width = tab_width
+        self.read_only = read_only
         self.undo_mgr = UndoManager(buf)
         self.cursor = 0
         self.goal_col: int | None = None    # cột muốn giữ khi đi lên/xuống qua dòng ngắn
@@ -68,11 +72,13 @@ class Editor:
         self.mark: int | None = None
         self._shift_sel = False             # vùng chọn tạo bằng Shift+mũi tên
         self.clipboard = b""
-        self.row_lens: list[int] = []      # số ký tự của từng dòng ở lần visible_lines gần nhất
+        self.system_clipboard = None        # clipboard.SystemClipboard: copy/cut ghi cả ra, paste ưu tiên đọc từ đó
+        self.row_lens: list[int] = []      # độ rộng hiển thị từng dòng ở lần visible_lines gần nhất
         self.last_find = b""
 
     @classmethod
-    def open(cls, path: str, kind: str = "splay", record: str | None = None, **opts) -> "Editor":
+    def open(cls, path: str, kind: str = "splay", record: str | None = None, *,
+             tab_width: int = display.DEFAULT_TAB, read_only: bool = False, **opts) -> "Editor":
         """Đọc cả file một lần rồi build cây O(n). File chưa tồn tại → buffer rỗng, tạo khi lưu.
 
         record: ghi mọi thao tác lên buffer ra file trace này (slice S6); gọi ``close()`` khi xong.
@@ -87,7 +93,10 @@ class Editor:
         buf = make_buffer(kind, data, **opts)
         if record is not None:
             buf = TracingBuffer(buf, open(record, "w", encoding="ascii", newline="\n"), base=data)
-        ed = cls(buf, path)
+        no_write = os.path.exists(path) and not os.access(path, os.W_OK)
+        ed = cls(buf, path, tab_width=tab_width, read_only=read_only or no_write)
+        if no_write and not read_only:
+            ed.warn("File không có quyền ghi – mở ở chế độ chỉ đọc")
         ed.open_seconds = time.perf_counter() - t0
         log.info("open path=%s bytes=%d lines=%d buffer=%s opts=%s read=%.3fs total=%.3fs%s",
                  path, len(data), buf.line_count(), kind, opts, t_read, ed.open_seconds,
@@ -139,23 +148,31 @@ class Editor:
         return line, self._col_of(start, self.cursor)
 
     def _col_of(self, start: int, pos: int) -> int:
-        """Số ký tự trong [start, pos)."""
+        """Cột hiển thị của pos trên dòng bắt đầu ở start."""
         n = pos - start
         if n > MAX_LINE_READ:
             return n                                    # dòng khổng lồ: xấp xỉ theo byte
-        return sum(1 for b in self.buf.substr(start, n) if not _is_cont(b))
+        return display.width(self.buf.substr(start, n).decode("utf-8", errors="replace"), self.tab_width)
 
     def _pos_at_col(self, line: int, col: int) -> int:
-        """Offset của ký tự thứ col trên dòng line (kẹp ở cuối dòng)."""
+        """Offset của ký tự chiếm cột hiển thị col trên dòng line (kẹp ở cuối dòng).
+
+        Cột rơi vào giữa một ký tự rộng hoặc một tab → đầu ký tự đó.
+        """
         start, end = self.line_start(line), self.line_end(line)
         data = self.buf.substr(start, min(end - start, MAX_LINE_READ))
-        seen = 0
-        for i, b in enumerate(data):
-            if not _is_cont(b):
-                if seen == col:
-                    return start + i
-                seen += 1
-        return start + len(data)                        # cột vượt cuối dòng → cuối dòng
+        if data.isascii() and b"\t" not in data:
+            return start + min(col, len(data))
+        x, i, n = 0, 0, len(data)
+        while i < n:
+            j = i + 1
+            while j < n and _is_cont(data[j]):
+                j += 1
+            w = display.char_width(data[i:j].decode("utf-8", errors="replace")[0], x, self.tab_width)
+            if x + w > col:
+                return start + i
+            x, i = x + w, j
+        return start + n                                # cột vượt cuối dòng → cuối dòng
 
     # ================================================================ di chuyển
 
@@ -207,6 +224,12 @@ class Editor:
 
     def doc_end(self) -> None:
         self._move_to(len(self.buf))
+
+    def click(self, line: int, col: int) -> None:
+        """Đặt cursor theo toạ độ văn bản (dòng, cột hiển thị) – dùng cho chuột; kẹp vào phạm vi hợp lệ."""
+        line = max(0, min(line, self.buf.line_count() - 1))
+        self.cancel_selection()
+        self._move_to(self._pos_at_col(line, max(0, col)))
 
     def goto_line(self, line: int) -> None:
         """line đếm từ 0; kẹp vào phạm vi hợp lệ."""
@@ -274,19 +297,31 @@ class Editor:
             self.warn("Chưa chọn gì")
             return
         self.clipboard = self.buf.substr(sel[0], sel[1] - sel[0])
+        self._export_clipboard()
         self.cancel_selection()
         self.message = f"Đã copy {len(self.clipboard)} byte"
 
     def cut(self) -> None:
+        if self._blocked():
+            return
         sel = self.selection()
         if sel is None:
             self.warn("Chưa chọn gì")
             return
         self.clipboard = self.buf.substr(sel[0], sel[1] - sel[0])
+        self._export_clipboard()
         self._apply(DeleteCmd(sel[0], sel[1] - sel[0]), alone=True)
         self.message = f"Đã cut {len(self.clipboard)} byte"
 
+    def _export_clipboard(self) -> None:
+        if self.system_clipboard is not None:
+            self.system_clipboard.copy(self.clipboard)
+
     def paste(self) -> None:
+        if self.system_clipboard is not None:
+            data = self.system_clipboard.paste()
+            if data:
+                self.clipboard = data
         if not self.clipboard:
             self.warn("Clipboard trống")
             return
@@ -352,8 +387,15 @@ class Editor:
 
     # ================================================================ sửa
 
+    def _blocked(self) -> bool:
+        if self.read_only:
+            self.warn("Chế độ chỉ đọc")
+        return self.read_only
+
     def _apply(self, cmd, *, alone: bool = False) -> None:
         """Chạy cmd qua UndoManager. alone: luôn là một bước undo riêng, không gộp trước/sau."""
+        if self._blocked():
+            return
         if alone:
             self.undo_mgr.seal()
         self.cursor = self.undo_mgr.do(cmd)
@@ -513,8 +555,8 @@ class Editor:
                 raw, pending = pending[:MAX_LINE_READ], b""
                 if line + 1 < n_lines:
                     pos = self.line_start(line + 1)
-            text = raw.decode("utf-8", errors="replace").replace("\t", " ")
-            self.row_lens.append(len(text))
-            out.append(text[self.left : self.left + width])
+            text, cols = display.clip(raw.decode("utf-8", errors="replace"), self.left, width, self.tab_width)
+            self.row_lens.append(cols)
+            out.append(text)
             line += 1
         return out

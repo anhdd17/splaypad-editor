@@ -208,3 +208,26 @@ Mỗi quyết định ghi: bối cảnh, lựa chọn, lý do, hệ quả. Số 
 - **Thông báo có mức** (`info` / `warning` / `error`) để UI tô màu; gán `ed.message` luôn đặt lại về `info`.
 - **Kiểm chứng:** `tests/test_logging_recovery.py`; `tests/test_app_pty.py` gửi SIGTERM cho app thật đang có thay đổi
   chưa lưu và kiểm file khôi phục, mở thư mục thì thoát mã 2 không có traceback.
+
+## ADR-015 – Giao diện: cột hiển thị, bố cục, chuột, dán, clipboard
+
+- **Cột = cột hiển thị** (`editor/display.py`): tab nhảy tới tab stop (`--tab-width`, mặc định 4), ký tự rộng
+  (East Asian Wide/Fullwidth) 2 ô, dấu kết hợp 0 ô, ký tự điều khiển hiện `^X`. Cursor, ↑↓ giữ cột, vùng chọn, cuộn
+  ngang và click chuột đều dùng cùng một quy tắc, nên khớp với terminal. Dòng ASCII in được (đa số) đi đường nhanh
+  `len()`; chỉ dòng có tab / Unicode mới duyệt từng ký tự.
+- **Bố cục** kiểu nano: vùng văn bản (cột số dòng, `~` sau cuối file) · thanh trạng thái (tên file, cờ đã sửa /
+  chỉ đọc / đang ghi trace, vùng chọn, Ln/Col, kích thước, cấu trúc dữ liệu) · dòng cuối là ô nhập, hoặc thông báo
+  tô theo mức (info / warning / error), hoặc gợi ý phím. F1 thay cả màn hình bằng bảng phím (2 cột khi đủ rộng).
+- **Một nguồn cho bảng phím:** `ui/keys.py` `HELP`/`HINTS` dùng cho cả trợ giúp lẫn thanh gợi ý.
+- **Màu** (`ui/theme.py`): nền mặc định của terminal (`use_default_colors`) nên hợp cả nền sáng lẫn tối; `NO_COLOR`
+  hoặc terminal không màu → chỉ reverse / bold / dim, thông tin không phụ thuộc màu.
+- **Dán từ terminal:** các ký tự đã nằm sẵn trong bộ đệm input được gom (đọc `nodelay`) thành một lần chèn – một bước
+  undo, một lần vẽ lại – thay vì xử lý từng ký tự. Gõ tay không bị ảnh hưởng vì mỗi lần chỉ có một ký tự.
+- **Clipboard hệ thống** (`editor/clipboard.py`): pbcopy/pbpaste, wl-copy, xclip, xsel (dò theo thứ tự, theo
+  `WAYLAND_DISPLAY`/`DISPLAY`); lỗi thì quay về clipboard nội bộ. `SPLAYPAD_CLIPBOARD=internal` để tắt (test đặt sẵn,
+  không đụng clipboard của máy chạy test).
+- **Chuột** bật mặc định (click đặt cursor, lăn cuộn); `--no-mouse` trả chuột cho terminal để chọn chữ kiểu terminal.
+- **Chỉ đọc:** `--read-only`, hoặc tự bật khi file không có quyền ghi; mọi lệnh sửa và lưu bị chặn kèm cảnh báo.
+- **Kiểm chứng giao diện:** `tests/ptyterm.py` chạy app thật trong pty và dựng lại màn hình bằng `pyte`, nên test
+  kiểm được chữ, màu, vị trí cursor (`tests/test_ui_screen.py`: bố cục, F1, tab/chữ rộng, cảnh báo, dán một bước undo,
+  click chuột, chỉ đọc, `NO_COLOR`, terminal 12×2). `scripts/screenshots.py` dùng cùng cơ chế để chụp ảnh cho README.

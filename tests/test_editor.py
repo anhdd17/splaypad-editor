@@ -173,9 +173,9 @@ def test_horizontal_scroll_and_decode():
     e = ed_of(b"abcdefghij\tk\xff")
     e.end()
     e.scroll_to_cursor(5, 4)
-    assert e.left == 13 - 4 + 1
+    assert e.left == 14 - 4 + 1                    # tab ở cột 10 nhảy tới tab stop 12 → cuối dòng ở cột 14
     e.left = 8
-    assert e.visible_lines(1, 10) == ["ij k�"]
+    assert e.visible_lines(1, 10) == ["ij  k�"]
 
 
 def test_page_down_up():
@@ -450,7 +450,7 @@ def test_keys_find_and_goto_prompts():
     state = {}
     for k in ["\x06", "b", "x", curses.KEY_BACKSPACE, "e", "t", "a"]:
         handle_key(e, k, 20, state)
-    assert prompt_text(state) == "Tìm: beta" and len(e.buf) == 21    # chữ gõ vào prompt, không vào buffer
+    assert prompt_text(state) == "beta" and len(e.buf) == 21    # chữ gõ vào prompt, không vào buffer
     handle_key(e, "\n", 20, state)
     assert prompt_text(state) is None and e.selection() == (6, 10)
     handle_key(e, "\x0e", 20, state)
