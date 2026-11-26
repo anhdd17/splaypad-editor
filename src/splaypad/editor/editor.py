@@ -3,14 +3,19 @@
 - Cursor là offset byte, luôn nằm trên ranh giới ký tự UTF-8. Dòng/cột tính khi cần.
 - Cột hiển thị = số ký tự (code point) từ đầu dòng; tab hiển thị như một ô. Ký tự rộng (CJK, emoji)
   chiếm 2 ô trên terminal nhưng vẫn tính 1 cột – giới hạn đã biết, ghi trong README.
+- Lưu: ghi file tạm rồi ``os.replace``; từ chối ghi đè nếu file trên đĩa đã đổi từ lúc mở / lưu lần trước
+  (``FileChangedError``, gọi lại với ``force=True`` để ghi đè). App lỗi giữa chừng thì ``write_recovery``.
 - Mọi thay đổi nội dung đi qua ``UndoManager``; di chuyển cursor thì ``seal()`` nhóm undo.
 - Vùng chọn = [mark, cursor). Mark đặt kiểu Emacs (giữ khi di chuyển) hoặc bằng Shift+mũi tên (mũi tên
   thường thì bỏ chọn). Gõ / dán khi đang chọn thì thay vùng chọn, gộp thành một bước undo.
 - Render chỉ đọc các dòng trong viewport (``line_to_offset`` + ``substr``) – liên quan trực tiếp RQ4.
 """
 
+import logging
 import os
 import tempfile
+import time
+from pathlib import Path
 
 from ..core import TextBuffer, make_buffer
 from .commands import DeleteCmd, GroupCmd, InsertCmd, PasteCmd
@@ -19,6 +24,28 @@ from .undo import UndoManager
 
 MAX_LINE_READ = 1 << 16     # dòng dài hơn chỉ đọc chừng này byte để render / tính cột
 READ_BLOCK = 4096           # render đọc tuần tự theo khối này
+RECOVER_SUFFIX = ".splaypad-recover"
+
+log = logging.getLogger(__name__)
+
+
+class FileChangedError(Exception):
+    """File trên đĩa đã bị chương trình khác sửa kể từ lúc mở / lưu lần trước."""
+
+
+def _disk_stamp(path: str | None) -> tuple[int, int] | None:
+    """(mtime_ns, size) của file, None nếu chưa tồn tại."""
+    if path is None:
+        return None
+    try:
+        st = os.stat(path)
+    except FileNotFoundError:
+        return None
+    return st.st_mtime_ns, st.st_size
+
+
+def recovery_path(path: str) -> str:
+    return path + RECOVER_SUFFIX
 
 
 def _is_cont(b: int) -> bool:
@@ -35,7 +62,9 @@ class Editor:
         self.top = 0                        # dòng đầu viewport
         self.left = 0                       # cột đầu viewport (cuộn ngang)
         self.dirty = False
-        self.message = ""
+        self.message = ""                   # setter đặt lại mức về "info"; cảnh báo / lỗi dùng warn / error
+        self._disk = _disk_stamp(path)      # trạng thái file trên đĩa ở lần đọc / ghi gần nhất
+        self.open_seconds = 0.0
         self.mark: int | None = None
         self._shift_sel = False             # vùng chọn tạo bằng Shift+mũi tên
         self.clipboard = b""
@@ -48,15 +77,42 @@ class Editor:
 
         record: ghi mọi thao tác lên buffer ra file trace này (slice S6); gọi ``close()`` khi xong.
         """
+        t0 = time.perf_counter()
         try:
             with open(path, "rb") as f:
                 data = f.read()
         except FileNotFoundError:
             data = b""
+        t_read = time.perf_counter() - t0
         buf = make_buffer(kind, data, **opts)
         if record is not None:
             buf = TracingBuffer(buf, open(record, "w", encoding="ascii", newline="\n"), base=data)
-        return cls(buf, path)
+        ed = cls(buf, path)
+        ed.open_seconds = time.perf_counter() - t0
+        log.info("open path=%s bytes=%d lines=%d buffer=%s opts=%s read=%.3fs total=%.3fs%s",
+                 path, len(data), buf.line_count(), kind, opts, t_read, ed.open_seconds,
+                 f" record={record}" if record else "")
+        rec = recovery_path(path)
+        if os.path.exists(rec):
+            log.warning("recovery file exists: %s", rec)
+            ed.warn(f"Có bản khôi phục từ phiên bị lỗi trước: {os.path.basename(rec)}")
+        return ed
+
+    # ================================================================ thông báo
+
+    @property
+    def message(self) -> str:
+        return self._message
+
+    @message.setter
+    def message(self, text: str) -> None:
+        self._message, self.message_level = text, "info"
+
+    def warn(self, text: str) -> None:
+        self.message, self.message_level = text, "warning"
+
+    def error(self, text: str) -> None:
+        self.message, self.message_level = text, "error"
 
     def close(self) -> None:
         """Đóng trace nếu đang ghi."""
@@ -215,7 +271,7 @@ class Editor:
     def copy(self) -> None:
         sel = self.selection()
         if sel is None:
-            self.message = "Chưa chọn gì"
+            self.warn("Chưa chọn gì")
             return
         self.clipboard = self.buf.substr(sel[0], sel[1] - sel[0])
         self.cancel_selection()
@@ -224,7 +280,7 @@ class Editor:
     def cut(self) -> None:
         sel = self.selection()
         if sel is None:
-            self.message = "Chưa chọn gì"
+            self.warn("Chưa chọn gì")
             return
         self.clipboard = self.buf.substr(sel[0], sel[1] - sel[0])
         self._apply(DeleteCmd(sel[0], sel[1] - sel[0]), alone=True)
@@ -232,7 +288,7 @@ class Editor:
 
     def paste(self) -> None:
         if not self.clipboard:
-            self.message = "Clipboard trống"
+            self.warn("Clipboard trống")
             return
         self._replace_selection(PasteCmd, self.clipboard, alone=True)
 
@@ -261,7 +317,7 @@ class Editor:
         """Tìm tiếp từ cursor (hết file thì quay lại đầu); chọn kết quả. pattern rỗng/None = lần tìm trước."""
         pattern = pattern or self.last_find
         if not pattern:
-            self.message = "Chưa có gì để tìm"
+            self.warn("Chưa có gì để tìm")
             return False
         self.last_find = pattern
         here = self.cursor
@@ -271,8 +327,9 @@ class Editor:
             pos = self._scan(pattern, 0, here + len(pattern) - 1)
             wrapped = pos is not None
         text = pattern.decode("utf-8", errors="replace")
+        log.debug("find len=%d found=%s wrapped=%s", len(pattern), pos is not None, wrapped)
         if pos is None:
-            self.message = f"Không tìm thấy: {text}"
+            self.warn(f"Không tìm thấy: {text}")
             return False
         self._move_to(pos + len(pattern))
         self.mark, self._shift_sel = pos, True          # chọn kết quả; mũi tên thường sẽ bỏ chọn
@@ -284,10 +341,10 @@ class Editor:
         try:
             n = int(text.strip())
         except ValueError:
-            self.message = f"Số dòng không hợp lệ: {text!r}"
+            self.warn(f"Số dòng không hợp lệ: {text!r}")
             return False
         if not 1 <= n <= self.buf.line_count():
-            self.message = f"Dòng phải trong 1…{self.buf.line_count()}"
+            self.warn(f"Dòng phải trong 1…{self.buf.line_count()}")
             return False
         self.cancel_selection()
         self.goto_line(n - 1)
@@ -345,7 +402,7 @@ class Editor:
     def undo(self) -> None:
         pos = self.undo_mgr.undo()
         if pos is None:
-            self.message = "Không còn gì để undo"
+            self.warn("Không còn gì để undo")
             return
         self.cursor, self.goal_col, self.dirty = pos, None, True
         self.cancel_selection()
@@ -353,18 +410,55 @@ class Editor:
     def redo(self) -> None:
         pos = self.undo_mgr.redo()
         if pos is None:
-            self.message = "Không còn gì để redo"
+            self.warn("Không còn gì để redo")
             return
         self.cursor, self.goal_col, self.dirty = pos, None, True
         self.cancel_selection()
 
     # ================================================================ lưu
 
-    def save(self, path: str | None = None) -> None:
-        """Ghi ra file tạm cùng thư mục rồi os.replace: lỗi giữa chừng không làm hỏng file cũ."""
+    def disk_changed(self) -> bool:
+        """File trên đĩa khác với lúc mở / lưu lần trước (bị chương trình khác sửa hoặc tạo ra)."""
+        now = _disk_stamp(self.path)
+        return now is not None and now != self._disk
+
+    def save(self, path: str | None = None, *, force: bool = False) -> None:
+        """Ghi ra file tạm cùng thư mục rồi os.replace: lỗi giữa chừng không làm hỏng file cũ.
+
+        Ném ``FileChangedError`` nếu file đã bị sửa bên ngoài, trừ khi ``force``.
+        """
         path = path or self.path
         if path is None:
             raise ValueError("chưa có tên file")
+        if not force and path == self.path and self.disk_changed():
+            log.warning("save refused, file changed on disk: %s", path)
+            raise FileChangedError(path)
+        t0 = time.perf_counter()
+        self._write_atomic(path)
+        self.path, self.dirty, self._disk = path, False, _disk_stamp(path)
+        log.info("save path=%s bytes=%d time=%.3fs%s", path, len(self.buf), time.perf_counter() - t0,
+                 " (force)" if force else "")
+        self.message = f"Đã lưu {len(self.buf):,} byte".replace(",", ".")
+
+    def write_recovery(self) -> str:
+        """Ghi nội dung hiện tại ra file khôi phục (cạnh file gốc, không được thì vào thư mục state)."""
+        name = os.path.basename(self.path or "untitled")
+        candidates = [recovery_path(self.path)] if self.path else []
+        state = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
+        candidates.append(os.path.join(state, "splaypad", "recover",
+                                       f"{name}-{time.strftime('%Y%m%d-%H%M%S')}{RECOVER_SUFFIX}"))
+        for target in candidates:
+            try:
+                os.makedirs(os.path.dirname(os.path.abspath(target)), exist_ok=True)
+                self._write_atomic(target)
+            except OSError as e:
+                log.error("write recovery failed: %s: %s", target, e)
+                continue
+            log.warning("recovery written: %s bytes=%d", target, len(self.buf))
+            return target
+        raise OSError("không ghi được file khôi phục ở bất kỳ đâu")
+
+    def _write_atomic(self, path: str) -> None:
         d = os.path.dirname(os.path.abspath(path))
         fd, tmp = tempfile.mkstemp(dir=d, prefix=".splaypad-")
         try:
@@ -377,8 +471,6 @@ class Editor:
         except BaseException:
             os.unlink(tmp)
             raise
-        self.path, self.dirty = path, False
-        self.message = f"Đã lưu {len(self.buf)} byte"
 
     # ================================================================ viewport
 

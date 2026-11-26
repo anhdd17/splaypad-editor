@@ -19,7 +19,7 @@ CTRL_SPACE, CTRL_C, CTRL_Q, CTRL_S, CTRL_V, CTRL_X, CTRL_Z = "\x00", "\x03", "\x
 CTRL_D, CTRL_F, CTRL_L, CTRL_N, ENTER = "\x04", "\x06", "\x0c", "\x0e", "\r"
 
 
-def run_app(path, keys, *args, timeout=20.0):
+def run_app(path, keys, *args, timeout=20.0, ready="Mở trong", send_signal=None):
     # openpty + subprocess thay vì pty.fork(): fork trong tiến trình nhiều luồng (worker xdist) có thể deadlock.
     master, slave = pty.openpty()
     env = dict(os.environ, TERM="xterm-256color", LINES="24", COLUMNS="80")
@@ -40,13 +40,15 @@ def run_app(path, keys, *args, timeout=20.0):
                     return
 
     try:
-        read_until("Mở trong".encode(), timeout)        # chờ app vẽ xong khung đầu
+        read_until(ready.encode(), timeout)             # chờ app vẽ xong khung đầu
         for k in keys:
             os.write(master, k.encode())
             mark = len(screen)
             read_until(b"\x1b", 0.3)                    # đợi app phản hồi (vẽ lại) rồi mới gửi tiếp
             if len(screen) == mark:
                 time.sleep(0.05)
+        if send_signal is not None:
+            proc.send_signal(send_signal)
         deadline = time.time() + timeout
         while proc.poll() is None and time.time() < deadline:
             read_until(b"\x00never", 0.1)              # tiếp tục đọc để app không bị nghẽn khi ghi
@@ -124,3 +126,45 @@ def test_record_trace_then_replay(tmp_path):
     replay(b, ops)
     assert b.to_bytes() == p.read_bytes()
     assert sum(op.kind == "R" for op in ops) > 10
+
+
+def test_sigterm_with_unsaved_changes_writes_recovery(tmp_path):
+    import signal
+    p = tmp_path / "t.txt"
+    p.write_bytes(b"abc\n")
+    code, screen = run_app(p, [END, "XYZ"], send_signal=signal.SIGTERM)
+    rec = tmp_path / "t.txt.splaypad-recover"
+    assert code == 128 + signal.SIGTERM
+    assert p.read_bytes() == b"abc\n"                  # file gốc không bị đụng tới
+    assert rec.read_bytes() == b"abcXYZ\n"
+    assert "splaypad-recover" in screen                 # báo cho người dùng sau khi trả lại terminal
+
+
+def test_open_shows_warning_when_recovery_exists(tmp_path):
+    p = tmp_path / "t.txt"
+    p.write_bytes(b"abc")
+    (tmp_path / "t.txt.splaypad-recover").write_bytes(b"abcd")
+    code, _ = run_app(p, [CTRL_Q], ready="khôi phục")
+    assert code == 0
+
+
+def test_open_directory_fails_cleanly(tmp_path):
+    code, screen = run_app(tmp_path, [], ready="splaypad:")
+    assert code == 2
+    assert "không mở được" in screen and "Traceback" not in screen
+
+
+def test_save_refuses_to_clobber_external_change_until_confirmed(tmp_path):
+    p = tmp_path / "t.txt"
+    p.write_bytes(b"v1")
+
+    class Clobber(str):                                 # "phím" đặc biệt: sửa file từ bên ngoài khi được gửi
+        def encode(self, *a):
+            p.write_bytes(b"external")
+            return b""
+
+    code, _ = run_app(p, ["!", Clobber(), CTRL_S, CTRL_Q, CTRL_Q])
+    assert code == 0 and p.read_bytes() == b"external"  # Ctrl-S đầu bị từ chối, thoát không lưu
+    p.write_bytes(b"v1")
+    code, _ = run_app(p, ["!", Clobber(), CTRL_S, CTRL_S, CTRL_Q])
+    assert code == 0 and p.read_bytes() == b"!v1"       # Ctrl-S lần hai ghi đè

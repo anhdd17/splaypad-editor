@@ -189,3 +189,22 @@ Mỗi quyết định ghi: bối cảnh, lựa chọn, lý do, hệ quả. Số 
 - **Hình và bảng** (`bench/plot.py`): median qua các lượt; mỗi hình có bảng Markdown trong `report/tables/`.
   Màu theo skill dataviz: mỗi cấu trúc/policy một màu cố định (bảng màu đã chạy validator: đạt CVD/normal-vision,
   cảnh báo tương phản → luôn có nhãn trực tiếp + bảng số), dải một màu cho chunk/kích thước, một trục y mỗi ô.
+
+## ADR-014 – Logging, khôi phục sau lỗi, lưu an toàn
+
+- **Log ra file, không ra màn hình:** curses chiếm terminal nên `splaypad.log` (`src/splaypad/log.py`) ghi vào
+  `$XDG_STATE_HOME/splaypad/splaypad.log`, xoay vòng 1MB × 3 file. Cấu hình: `--log-level`/`--log-file` >
+  `SPLAYPAD_LOG_LEVEL`/`SPLAYPAD_LOG_FILE` > INFO. Không ghi được log (thư mục chỉ đọc…) thì bỏ qua, editor vẫn chạy.
+- **Nội dung log:** sự kiện (mở, lưu, thoát, crash kèm traceback), kích thước, thời gian; WARNING khi một phím hoặc
+  một khung hình mất ≥ 100ms (tên phím, thời gian xử lý / vẽ, kích thước buffer). **Không** ghi văn bản, chuỗi tìm
+  kiếm hay ký tự người dùng gõ (ký tự in được ghi thành `<char>`); có test kiểm điều này.
+- **Thoát bất thường không mất dữ liệu:** lỗi không lường trước, SIGTERM, SIGHUP (đóng terminal), SIGINT → curses
+  trả lại terminal, nếu còn thay đổi chưa lưu thì ghi `FILE.splaypad-recover` (không được thì vào
+  `$XDG_STATE_HOME/splaypad/recover/`), in đường dẫn file khôi phục và file log ra stderr. Lần mở sau thấy file khôi
+  phục thì cảnh báo trên thanh trạng thái. Mã thoát: 0 / 1 lỗi / 2 sai tham số hoặc không mở được file / 128+tín hiệu.
+- **Không ghi đè thay đổi của chương trình khác:** editor nhớ `(mtime_ns, size)` của file lúc mở và sau mỗi lần lưu;
+  khác đi thì Ctrl-S bị từ chối kèm cảnh báo, bấm Ctrl-S lần nữa mới ghi đè (như "file changed on disk" của các
+  editor phổ biến).
+- **Thông báo có mức** (`info` / `warning` / `error`) để UI tô màu; gán `ed.message` luôn đặt lại về `info`.
+- **Kiểm chứng:** `tests/test_logging_recovery.py`; `tests/test_app_pty.py` gửi SIGTERM cho app thật đang có thay đổi
+  chưa lưu và kiểm file khôi phục, mở thư mục thì thoát mã 2 không có traceback.

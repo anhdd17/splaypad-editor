@@ -18,7 +18,9 @@
 
 import curses
 
-from ..editor.editor import Editor
+import logging
+
+from ..editor.editor import Editor, FileChangedError
 
 CTRL_SPACE, CTRL_A, CTRL_C, CTRL_D, CTRL_E, CTRL_F, CTRL_G, CTRL_L, CTRL_N = 0, 1, 3, 4, 5, 6, 7, 12, 14
 CTRL_Q, CTRL_S, CTRL_V, CTRL_X, CTRL_Y, CTRL_Z = 17, 19, 22, 24, 25, 26
@@ -27,6 +29,8 @@ PROMPTS = {"find": "Tìm: ", "goto": "Đến dòng: "}
 BACKSPACE = (curses.KEY_BACKSPACE, 127, 8)
 ENTER = (10, 13, curses.KEY_ENTER)
 QUIT = "quit"
+
+log = logging.getLogger(__name__)
 
 
 def normalize(key: int | str) -> int | str:
@@ -68,6 +72,7 @@ def handle_key(ed: Editor, key: int | str, height: int, state: dict) -> str | No
         _handle_prompt(ed, key, state)
         return None
     confirm_quit = state.pop("confirm_quit", False)
+    confirm_save = state.pop("confirm_save", False)
     page = max(1, height - 1)
     moves = {
         curses.KEY_LEFT: ed.left_char, curses.KEY_RIGHT: ed.right_char,
@@ -117,13 +122,21 @@ def handle_key(ed: Editor, key: int | str, height: int, state: dict) -> str | No
     elif key == CTRL_Y:
         ed.redo()
     elif key == CTRL_S:
-        try:
-            ed.save()
-        except OSError as e:
-            ed.message = f"Lưu thất bại: {e}"
+        _save(ed, state, force=confirm_save)
     elif key == CTRL_Q:
         if not ed.dirty or confirm_quit:
             return QUIT
         state["confirm_quit"] = True
-        ed.message = "Chưa lưu! Ctrl-Q lần nữa để thoát, Ctrl-S để lưu"
+        ed.warn("Chưa lưu! Ctrl-Q lần nữa để thoát, Ctrl-S để lưu")
     return None
+
+
+def _save(ed: Editor, state: dict, *, force: bool) -> None:
+    try:
+        ed.save(force=force)
+    except FileChangedError:
+        state["confirm_save"] = True
+        ed.warn("File đã bị sửa bên ngoài từ lúc mở! Ctrl-S lần nữa để ghi đè")
+    except OSError as e:
+        log.error("save failed: %s", e)
+        ed.error(f"Lưu thất bại: {e.strerror or e}")
