@@ -10,6 +10,11 @@ nhỏ riêng, ``gc.collect()`` rồi ``gc.disable()`` trong vòng đo, trace t�
 đo tách khỏi phát lại trace. Lặp theo *lượt ở ngoài, cấu hình ở trong* để nhiễu theo thời gian (nhiệt,
 tác vụ nền) chia đều cho mọi cấu hình. CSV ghi dần từng dòng nên dừng giữa chừng vẫn giữ kết quả.
 
+Ngân sách thời gian (``--budget``, mặc định 30s phát lại mỗi lượt): cấu trúc O(n) mỗi thao tác (gap buffer,
+piece table trên file 100MB) có thể mất hàng chục phút một lượt chỉ để đo lại cùng một chi phí. Hết ngân sách
+thì dừng phát lại; các chỉ số tính trên phần đã chạy (``ops`` < ``ops_total``, ``truncated`` = 1). Trace tổng hợp
+có tính dừng (stationary) nên độ trễ mỗi thao tác vẫn so được; *tổng* thời gian thì không – hình dùng µs/thao tác.
+
 Cột CSV: buffer, policy, chunk, trace, file_size, run, metric, value, commit, machine, python.
 """
 
@@ -33,6 +38,7 @@ LOCAL_D = ("local-1", "local-10", "local-100", "local-1000", "local-10000", "uni
 POLICIES = (("full", 0.5), ("noread", 0.5), ("semi", 0.5), ("random", 0.1), ("random", 0.5))
 COLUMNS = ("buffer", "policy", "chunk", "trace", "file_size", "run", "metric", "value", "commit", "machine", "python")
 WARMUP_OPS = 3000
+BUDGET_S = 30.0
 TIMEOUT_S = 1800
 
 
@@ -152,11 +158,16 @@ def run_one(c: dict) -> dict:
     calls = {k: getattr(buf, name) for k, name in OPS.items()}
     lat = array("q", bytes(8 * len(ops)))
     clock = time.perf_counter_ns
+    deadline = clock() + int(c.get("budget_s", BUDGET_S) * 1e9)
+    done = len(ops)
     s0 = buf.stats(full=False)
     buckets: dict[int, list[int]] = {}                  # RQ2: log2(khoảng cách) → [số op, node thăm, ns]
     if c["per_op_stats"]:
         stats, prev = buf.stats, 0
         for i, op in enumerate(ops):
+            if not i & 63 and clock() > deadline:      # kiểm tra ngân sách mỗi 64 op, ngoài vùng đo
+                done = i
+                break
             before = stats(full=False).nodes_visited
             fn, args = calls[op.kind], op.args
             t0 = clock()
@@ -172,6 +183,9 @@ def run_one(c: dict) -> dict:
                 prev = pos
     else:
         for i, op in enumerate(ops):
+            if not i & 63 and clock() > deadline:
+                done = i
+                break
             fn, args = calls[op.kind], op.args
             t0 = clock()
             fn(*args)
@@ -179,11 +193,11 @@ def run_one(c: dict) -> dict:
     s1 = buf.stats(full=True)
     gc.enable()
 
-    srt = sorted(lat)
+    srt = sorted(lat[:done])
     n = len(srt)
     q = lambda p: srt[min(n - 1, int(p * n))] / 1000 if n else 0.0   # noqa: E731  µs
     m = {
-        "ops": n, "total_s": sum(srt) / 1e9, "mean_us": sum(srt) / n / 1000 if n else 0.0,
+        "ops": n, "ops_total": len(ops), "truncated": int(n < len(ops)), "total_s": sum(srt) / 1e9, "mean_us": sum(srt) / n / 1000 if n else 0.0,
         "p50_us": q(0.50), "p95_us": q(0.95), "p99_us": q(0.99), "max_us": srt[-1] / 1000 if n else 0.0,
         "t_read_s": t_read, "t_build_s": t_build,
         "rotations": s1.rotations - s0.rotations, "nodes_visited": s1.nodes_visited - s0.nodes_visited,
@@ -213,6 +227,7 @@ def main(argv=None) -> int:
     p.add_argument("--sizes", type=int, nargs="+", default=list(SIZES), help="MB")
     p.add_argument("--runs", type=int, default=5)
     p.add_argument("--quick", action="store_true", help="file 1MB, 1 lượt (kiểm tra harness)")
+    p.add_argument("--budget", type=float, default=BUDGET_S, help="giây phát lại tối đa mỗi lượt")
     p.add_argument("--out", type=Path, default=RESULTS)
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--one", help=argparse.SUPPRESS)
@@ -233,6 +248,7 @@ def main(argv=None) -> int:
         return 0
 
     for c in configs:                                   # chuẩn bị trace trước khi đo
+        c["budget_s"] = a.budget
         t, b = trace_paths(c)
         c["trace_path"], c["base_path"] = str(t), str(b)
         c["file_size"] = b.stat().st_size
@@ -241,7 +257,8 @@ def main(argv=None) -> int:
     env = environment()
     out_csv = a.out / f"bench-{stamp}-{env['commit'] or 'nogit'}.csv"
     write_json(out_csv.with_suffix(".env.json"), {**env, "experiments": names, "sizes": sizes, "runs": runs,
-                                                  "warmup_ops": WARMUP_OPS, "gc": "disabled during replay"})
+                                                  "warmup_ops": WARMUP_OPS, "budget_s": a.budget,
+                                                  "gc": "disabled during replay"})
     common = {"commit": env["commit"], "machine": machine(), "python": env["python"]}
     total, done, t_all = len(configs) * runs, 0, time.perf_counter()
     with open(out_csv, "w", newline="") as f:
