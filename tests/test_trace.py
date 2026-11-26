@@ -100,3 +100,11 @@ def test_editor_open_with_record(tmp_path):
     meta, ops = read_trace(tr.read_text().splitlines())
     assert meta["base"] == fingerprint(b"hello\n") and TraceOp("I", (6, b"world")) in ops
     Editor(make_buffer("naive")).close()            # không ghi trace: close không làm gì
+
+
+def test_base_size_meta():
+    meta, _ = read_trace(["# version 1", "# base_size 3", "# gen local d=10 seed=1", "# chú thích tự do"])
+    assert meta == {"version": "1", "base_size": "3", "gen": "local d=10 seed=1"}
+    check_base(meta, b"xyz")
+    with pytest.raises(ValueError, match="dài 3"):
+        check_base(meta, b"wxyz")

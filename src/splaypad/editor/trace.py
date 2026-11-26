@@ -4,6 +4,8 @@
 
     # version 1
     # base <size> <sha256>      nội dung buffer lúc bắt đầu ghi (để phát lại đúng file nền)
+    # base_size <size>          trace tổng hợp: chỉ cần file nền đúng kích thước, nội dung tuỳ ý
+    # gen <tham số>             trace tổng hợp: lệnh / seed đã sinh ra nó
     I 1024 b'hello\\n'          insert(1024, b"hello\\n") – chuỗi là repr của bytes
     D 1020 3                    erase(1020, 3)
     R 0 4096                    substr(0, 4096); at(pos) ghi thành R pos 1
@@ -22,6 +24,7 @@ from typing import IO, Iterable, Iterator
 from ..core import Stats, TextBuffer
 
 VERSION = 1
+META_KEYS = ("version", "base", "base_size", "gen")
 OPS = {"I": "insert", "D": "erase", "R": "substr", "G": "line_to_offset", "O": "offset_to_line"}
 
 
@@ -132,7 +135,7 @@ def read_trace(lines: Iterable[str]) -> tuple[dict[str, str], list[TraceOp]]:
         s = text.strip()
         if s.startswith("#"):
             key, _, val = s[1:].strip().partition(" ")
-            if key in ("version", "base"):
+            if key in META_KEYS:
                 meta[key] = val.strip()
             continue
         op = parse_line(s, i)
@@ -147,6 +150,8 @@ def check_base(meta: dict[str, str], data: bytes) -> None:
     """Báo lỗi nếu file nền không khớp với file lúc ghi trace."""
     if "base" in meta and meta["base"] != fingerprint(data):
         raise ValueError(f"file nền không khớp trace: cần {meta['base']}, có {fingerprint(data)}")
+    if "base_size" in meta and int(meta["base_size"]) != len(data):
+        raise ValueError(f"file nền phải dài {meta['base_size']} byte, có {len(data)}")
 
 
 def replay(buf: TextBuffer, ops: Iterable[TraceOp]) -> None:
