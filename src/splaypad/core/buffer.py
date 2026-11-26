@@ -70,7 +70,8 @@ class TextBuffer(ABC):
 
     # --- Thống kê ---
     @abstractmethod
-    def stats(self) -> Stats: ...
+    def stats(self, full: bool = True) -> Stats:
+        """Bộ đếm cộng dồn (O(1)). ``full=False`` bỏ qua ``nodes``/``height`` vốn có thể tốn O(n) để tính."""
 
     # --- Tiện ích chung ---
     def check_invariants(self) -> None:

@@ -410,10 +410,10 @@ class SplayRope(TextBuffer):
             yield x.chunk
             x = self._succ(x)
 
-    def stats(self) -> Stats:
-        """nodes, height duyệt toàn cây O(n) – dùng cho debug/benchmark, không gọi mỗi thao tác."""
+    def stats(self, full: bool = True) -> Stats:
+        """full: tính nodes, height bằng cách duyệt toàn cây O(n) – không gọi mỗi thao tác / mỗi khung hình."""
         nodes = height = 0
-        stack = [(self.root, 1)] if self.root is not None else []
+        stack = [(self.root, 1)] if self.root is not None and full else []
         while stack:
             x, d = stack.pop()
             nodes += 1

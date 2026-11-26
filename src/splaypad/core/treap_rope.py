@@ -316,9 +316,10 @@ class TreapRope(TextBuffer):
             x = stack.pop()
             yield x.chunk
 
-    def stats(self) -> Stats:
+    def stats(self, full: bool = True) -> Stats:
+        """full: tính nodes, height bằng cách duyệt toàn cây O(n)."""
         nodes = height = 0
-        stack = [(self.root, 1)] if self.root is not None else []
+        stack = [(self.root, 1)] if self.root is not None and full else []
         while stack:
             x, d = stack.pop()
             nodes += 1

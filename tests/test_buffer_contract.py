@@ -163,3 +163,12 @@ def test_oracle_lines_match_definition(data):
     assert [b.line_to_offset(i) for i in range(len(starts))] == starts
     for p in range(len(data) + 1):
         assert b.offset_to_line(p) == data[:p].count(b"\n")
+
+
+def test_stats_cheap_mode_keeps_counters(kind):
+    b = mk(kind, bytes(range(256)) * 40)
+    b.insert(5000, b"xyz")
+    b.substr(100, 10)
+    full, cheap = b.stats().as_dict(), b.stats(full=False).as_dict()
+    for k in ("rotations", "nodes_visited", "last_access_depth", "bytes_copied"):
+        assert cheap[k] == full[k]

@@ -147,3 +147,12 @@ Mỗi quyết định ghi: bối cảnh, lựa chọn, lý do, hệ quả. Số 
 - **Prompt** (Ctrl-F, Ctrl-L) là một chế độ của `ui/keys.py` (`state["prompt"]`), vẽ ở thanh trạng thái.
 - **Đo trên file 100MB:** tìm chuỗi nằm ở cuối file: splay 0,05s (quét 102.555 chunk), gap 0,01s;
   đến dòng 1.500.000: splay/treap < 0,1ms, piece ~40ms, gap ~100ms.
+
+## ADR-011 – Debug panel (slice S5)
+
+- **Nội dung:** nodes, height, độ sâu truy cập của phím vừa bấm; số phép quay / node đã thăm / byte đã copy
+  **tách riêng** cho phím vừa bấm và cho lần vẽ màn hình trước đó; tổng cộng dồn. Bật/tắt bằng F2 hoặc Ctrl-D.
+- **Vì sao tách phím / vẽ:** render gọi `line_to_offset` + `substr`, với splay `full` các phép đọc này cũng quay cây.
+  Panel cho thấy trực tiếp chi phí đó và so được với `noread` (vẽ không quay) – minh hoạ cho RQ4.
+- **Chi phí của chính panel:** `stats(full=False)` (thêm vào interface) chỉ đọc bộ đếm O(1); `nodes`/`height` cần
+  duyệt O(n) nên làm mới tối đa mỗi giây. `stats()` không đổi bộ đếm nên panel không làm sai số liệu nó hiển thị.

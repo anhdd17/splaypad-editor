@@ -132,7 +132,7 @@ class GapBuffer(TextBuffer):
         for i in range(pos, n, ITER_BLOCK):
             yield self._span(i, min(ITER_BLOCK, n - i))
 
-    def stats(self) -> Stats:
+    def stats(self, full: bool = True) -> Stats:
         return Stats(nodes=1, height=1, bytes_copied=self.bytes_copied)
 
     def check_invariants(self) -> None:

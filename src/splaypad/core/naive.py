@@ -54,5 +54,5 @@ class NaiveBuffer(TextBuffer):
         for i in range(pos, len(self._b), ITER_BLOCK):
             yield bytes(self._b[i : i + ITER_BLOCK])
 
-    def stats(self) -> Stats:
+    def stats(self, full: bool = True) -> Stats:
         return Stats()

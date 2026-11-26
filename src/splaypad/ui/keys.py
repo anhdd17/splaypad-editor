@@ -11,6 +11,7 @@
 | Ctrl-Z / Ctrl-Y              | undo / redo                  |
 | Ctrl-F, Ctrl-N / F3          | tìm (Enter trống = tìm lại), tìm tiếp |
 | Ctrl-L                       | đến dòng                     |
+| F2 / Ctrl-D                  | bật / tắt debug panel        |
 | Ctrl-S                       | lưu                          |
 | Ctrl-Q                       | thoát (bấm hai lần nếu chưa lưu) |
 """
@@ -19,7 +20,7 @@ import curses
 
 from ..editor.editor import Editor
 
-CTRL_SPACE, CTRL_A, CTRL_C, CTRL_E, CTRL_F, CTRL_G, CTRL_L, CTRL_N = 0, 1, 3, 5, 6, 7, 12, 14
+CTRL_SPACE, CTRL_A, CTRL_C, CTRL_D, CTRL_E, CTRL_F, CTRL_G, CTRL_L, CTRL_N = 0, 1, 3, 4, 5, 6, 7, 12, 14
 CTRL_Q, CTRL_S, CTRL_V, CTRL_X, CTRL_Y, CTRL_Z = 17, 19, 22, 24, 25, 26
 ESC = 27
 PROMPTS = {"find": "Tìm: ", "goto": "Đến dòng: "}
@@ -101,6 +102,8 @@ def handle_key(ed: Editor, key: int | str, height: int, state: dict) -> str | No
         ed.find()
     elif key == CTRL_L:
         state["prompt"] = {"kind": "goto", "text": ""}
+    elif key in (curses.KEY_F2, CTRL_D):
+        state["debug"] = not state.get("debug", False)
     elif key in BACKSPACE:
         ed.backspace()
     elif key == curses.KEY_DC:

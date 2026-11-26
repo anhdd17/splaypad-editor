@@ -166,7 +166,7 @@ class PieceTable(TextBuffer):
                 yield self._bytes(p, lo, min(lo + ITER_BLOCK, p[LEN]))
             off = 0
 
-    def stats(self) -> Stats:
+    def stats(self, full: bool = True) -> Stats:
         n = len(self._pieces)
         return Stats(nodes=n, height=n, nodes_visited=self.nodes_visited,
                      last_access_depth=self.last_access_depth, bytes_copied=self.bytes_copied)

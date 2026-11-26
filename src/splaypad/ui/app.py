@@ -5,6 +5,7 @@ import os
 import time
 
 from ..editor.editor import Editor
+from .debug import WIDTH as PANEL_W, DebugPanel
 from .keys import QUIT, handle_key, prompt_text
 
 
@@ -23,9 +24,11 @@ def status_line(ed: Editor, kind: str, policy: str) -> str:
     return " | ".join(parts)
 
 
-def draw(scr, ed: Editor, kind: str, policy: str, state: dict) -> None:
-    h, w = scr.getmaxyx()
+def draw(scr, ed: Editor, kind: str, policy: str, state: dict, panel: DebugPanel) -> None:
+    h, full_w = scr.getmaxyx()
     text_h = max(1, h - 1)
+    show_panel = state.get("debug", False) and full_w >= PANEL_W + 20
+    w = full_w - PANEL_W - 1 if show_panel else full_w
     ed.scroll_to_cursor(text_h, w)
     scr.erase()
     rows = ed.visible_lines(text_h, w)
@@ -33,11 +36,15 @@ def draw(scr, ed: Editor, kind: str, policy: str, state: dict) -> None:
         scr.addnstr(i, 0, text, w)
     for row, x0, x1 in ed.selection_spans(text_h, w):
         scr.chgat(row, x0, x1 - x0, curses.A_REVERSE)
+    if show_panel:
+        scr.vline(0, w, curses.ACS_VLINE, text_h)
+        for i, row in enumerate(panel.lines()[:text_h]):
+            scr.addnstr(i, w + 1, row, PANEL_W)
     prompt = prompt_text(state)
     bar = prompt if prompt is not None else status_line(ed, kind, policy)
-    scr.addnstr(h - 1, 0, bar.ljust(w - 1), w - 1, curses.A_REVERSE)
+    scr.addnstr(h - 1, 0, bar.ljust(full_w - 1), full_w - 1, curses.A_REVERSE)
     if prompt is not None:                              # cursor nằm ở ô nhập
-        scr.move(h - 1, min(len(prompt), w - 2))
+        scr.move(h - 1, min(len(prompt), full_w - 2))
     else:
         line, col = ed.cursor_line_col()
         scr.move(min(line - ed.top, text_h - 1), min(col - ed.left, w - 1))
@@ -50,13 +57,18 @@ def loop(scr, ed: Editor, kind: str, policy: str) -> None:
     curses.noecho()
     scr.keypad(True)
     state: dict = {}
+    panel = DebugPanel(ed.buf, f"{kind}/{policy}" if kind == "splay" else kind)
     while True:
-        draw(scr, ed, kind, policy, state)
+        panel.begin()
+        draw(scr, ed, kind, policy, state, panel)
+        panel.end_draw()                                # chi phí đọc do render: hiện ở khung kế tiếp
         key = scr.get_wch()
         if key == curses.KEY_RESIZE:
             continue
         ed.message = ""
-        if handle_key(ed, key, max(1, scr.getmaxyx()[0] - 1), state) == QUIT:
+        quit_ = handle_key(ed, key, max(1, scr.getmaxyx()[0] - 1), state) == QUIT
+        panel.end_key()
+        if quit_:
             return
 
 

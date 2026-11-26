@@ -16,7 +16,7 @@ pty = pytest.importorskip("pty")
 UP, DOWN, END, HOME = "\x1bOA", "\x1bOB", "\x1bOF", "\x1bOH"
 S_RIGHT, S_LEFT, S_HOME = "\x1b[1;2C", "\x1b[1;2D", "\x1b[1;2H"
 CTRL_SPACE, CTRL_C, CTRL_Q, CTRL_S, CTRL_V, CTRL_X, CTRL_Z = "\x00", "\x03", "\x11", "\x13", "\x16", "\x18", "\x1a"
-CTRL_F, CTRL_L, CTRL_N, ENTER = "\x06", "\x0c", "\x0e", "\r"
+CTRL_D, CTRL_F, CTRL_L, CTRL_N, ENTER = "\x04", "\x06", "\x0c", "\x0e", "\r"
 
 
 def run_app(path, keys, *args, timeout=20.0):
@@ -96,3 +96,12 @@ def test_find_and_goto_line(tmp_path):
     lines = p.read_bytes().split(b"\n")
     assert code == 0
     assert lines[0] == b"line 0 foo" and lines[1] == b"line 1 " and lines[149] == b"#line 149 foo"
+
+
+def test_debug_panel_on_while_editing(tmp_path):
+    p = tmp_path / "t.txt"
+    p.write_bytes(b"x" * 300 + b"\n" + b"y" * 50)
+    keys = [CTRL_D, END, "!", DOWN, "?", CTRL_D, CTRL_D, CTRL_S, CTRL_Q]   # panel bật, cuộn ngang dòng dài
+    code, screen = run_app(p, keys)
+    assert code == 0 and p.read_bytes() == b"x" * 300 + b"!\n" + b"y" * 50 + b"?"
+    assert "rotations" in screen

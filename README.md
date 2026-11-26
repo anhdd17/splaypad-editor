@@ -41,6 +41,7 @@ không làm hỏng file cũ.
 | Ctrl-F | tìm (kết quả được chọn sẵn; Enter để trống = tìm lại chuỗi trước) |
 | Ctrl-N / F3 | tìm tiếp (hết file thì quay lại đầu) |
 | Ctrl-L | đến dòng |
+| F2 / Ctrl-D | bật / tắt debug panel: nodes, height, độ sâu truy cập; số phép quay / node đã thăm / byte đã copy của phím vừa bấm và của lần vẽ màn hình |
 | Ctrl-S | lưu |
 | Ctrl-Q | thoát (bấm hai lần nếu chưa lưu) |
 
