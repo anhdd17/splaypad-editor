@@ -9,6 +9,8 @@
 | Esc, Ctrl-G                  | bỏ chọn                      |
 | Ctrl-C / Ctrl-X / Ctrl-V     | copy / cut / paste           |
 | Ctrl-Z / Ctrl-Y              | undo / redo                  |
+| Ctrl-F, Ctrl-N / F3          | tìm (Enter trống = tìm lại), tìm tiếp |
+| Ctrl-L                       | đến dòng                     |
 | Ctrl-S                       | lưu                          |
 | Ctrl-Q                       | thoát (bấm hai lần nếu chưa lưu) |
 """
@@ -17,9 +19,10 @@ import curses
 
 from ..editor.editor import Editor
 
-CTRL_SPACE, CTRL_A, CTRL_C, CTRL_E, CTRL_G, CTRL_Q, CTRL_S, CTRL_V, CTRL_X, CTRL_Y, CTRL_Z = (
-    0, 1, 3, 5, 7, 17, 19, 22, 24, 25, 26)
+CTRL_SPACE, CTRL_A, CTRL_C, CTRL_E, CTRL_F, CTRL_G, CTRL_L, CTRL_N = 0, 1, 3, 5, 6, 7, 12, 14
+CTRL_Q, CTRL_S, CTRL_V, CTRL_X, CTRL_Y, CTRL_Z = 17, 19, 22, 24, 25, 26
 ESC = 27
+PROMPTS = {"find": "Tìm: ", "goto": "Đến dòng: "}
 BACKSPACE = (curses.KEY_BACKSPACE, 127, 8)
 ENTER = (10, 13, curses.KEY_ENTER)
 QUIT = "quit"
@@ -32,12 +35,37 @@ def normalize(key: int | str) -> int | str:
     return key
 
 
+def prompt_text(state: dict) -> str | None:
+    """Dòng prompt đang nhập (để vẽ ở thanh trạng thái), hoặc None nếu không ở chế độ prompt."""
+    p = state.get("prompt")
+    return None if p is None else PROMPTS[p["kind"]] + p["text"]
+
+
+def _handle_prompt(ed: Editor, key: int | str, state: dict) -> None:
+    p = state["prompt"]
+    if isinstance(key, str):
+        p["text"] += key
+    elif key in BACKSPACE:
+        p["text"] = p["text"][:-1]
+    elif key in (ESC, CTRL_G):
+        del state["prompt"]
+    elif key in ENTER:
+        del state["prompt"]
+        if p["kind"] == "find":
+            ed.find(p["text"].encode("utf-8"))
+        else:
+            ed.goto_line_text(p["text"])
+
+
 def handle_key(ed: Editor, key: int | str, height: int, state: dict) -> str | None:
-    """Thực hiện thao tác ứng với key. ``state`` giữ trạng thái giữa các phím (xác nhận thoát).
+    """Thực hiện thao tác ứng với key. ``state`` giữ trạng thái giữa các phím (xác nhận thoát, prompt).
 
     Trả về ``QUIT`` khi cần thoát.
     """
     key = normalize(key)
+    if "prompt" in state:
+        _handle_prompt(ed, key, state)
+        return None
     confirm_quit = state.pop("confirm_quit", False)
     page = max(1, height - 1)
     moves = {
@@ -67,6 +95,12 @@ def handle_key(ed: Editor, key: int | str, height: int, state: dict) -> str | No
         ed.cut()
     elif key == CTRL_V:
         ed.paste()
+    elif key == CTRL_F:
+        state["prompt"] = {"kind": "find", "text": ""}
+    elif key in (CTRL_N, curses.KEY_F3):
+        ed.find()
+    elif key == CTRL_L:
+        state["prompt"] = {"kind": "goto", "text": ""}
     elif key in BACKSPACE:
         ed.backspace()
     elif key == curses.KEY_DC:

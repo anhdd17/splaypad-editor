@@ -16,6 +16,7 @@ pty = pytest.importorskip("pty")
 UP, DOWN, END, HOME = "\x1bOA", "\x1bOB", "\x1bOF", "\x1bOH"
 S_RIGHT, S_LEFT, S_HOME = "\x1b[1;2C", "\x1b[1;2D", "\x1b[1;2H"
 CTRL_SPACE, CTRL_C, CTRL_Q, CTRL_S, CTRL_V, CTRL_X, CTRL_Z = "\x00", "\x03", "\x11", "\x13", "\x16", "\x18", "\x1a"
+CTRL_F, CTRL_L, CTRL_N, ENTER = "\x06", "\x0c", "\x0e", "\r"
 
 
 def run_app(path, keys, *args, timeout=20.0):
@@ -83,3 +84,15 @@ def test_double_ctrl_q_quits_without_saving(tmp_path):
     p = tmp_path / "t.txt"
     code, _ = run_app(p, ["x", CTRL_Q, CTRL_Q])
     assert code == 0 and not p.exists()
+
+
+def test_find_and_goto_line(tmp_path):
+    p = tmp_path / "t.txt"
+    p.write_bytes(b"".join(b"line %d foo\n" % i for i in range(200)))
+    keys = [CTRL_F, *"foo", ENTER, CTRL_N, CTRL_X,     # tìm "foo" hai lần, cut lần thứ hai (dòng 1)
+            CTRL_L, *"150", ENTER, "#",                 # đến dòng 150 (đếm từ 1), gõ '#'
+            CTRL_S, CTRL_Q]
+    code, _ = run_app(p, keys)
+    lines = p.read_bytes().split(b"\n")
+    assert code == 0
+    assert lines[0] == b"line 0 foo" and lines[1] == b"line 1 " and lines[149] == b"#line 149 foo"

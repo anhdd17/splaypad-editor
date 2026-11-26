@@ -382,3 +382,87 @@ def test_keys_selection_clipboard():
     assert e.buf.to_bytes() == b"oneoneoneone" and e.mark is None
     press(e, "\x00", curses.KEY_LEFT, "\x07")
     assert e.mark is None
+
+
+# ------------------------------------------------------------ S4: tìm, đến dòng
+
+def test_scan_matches_across_chunk_boundaries(kind):
+    data = b"".join(b"%03d," % i for i in range(300))   # chunk=4: mọi số đều vắt qua ranh giới
+    e = ed_of(data, kind)
+    for i in (0, 7, 123, 299):
+        pat = b",%03d," % i if i else b"000,"
+        want = data.find(pat)
+        assert e._scan(pat, 0) == want
+        nxt = data.find(pat, want + 1)
+        assert e._scan(pat, want + 1) == (nxt if nxt >= 0 else None)
+    assert e._scan(b"xyz", 0) is None
+    assert e._scan(b"001,", 0, stop=7) is None and e._scan(b"001,", 0, stop=8) == 4
+
+
+def test_find_does_not_change_tree():
+    e = ed_of(b"abc " * 500, "splay")
+    before = e.buf.stats().rotations
+    e._scan(b"zzz", 0)
+    assert e.buf.stats().rotations == before        # quét bằng iter_chunks: không splay
+
+
+def test_find_selects_and_find_next_wraps(kind):
+    e = ed_of(b"cat dog cat dog cat", kind)
+    assert e.find(b"dog") and e.selection() == (4, 7)
+    assert e.find() and e.selection() == (12, 15)   # tìm tiếp dùng chuỗi trước
+    assert e.find() and e.selection() == (4, 7) and "đầu file" in e.message
+    e.plain_move(e.right_char)                      # mũi tên thường bỏ chọn kết quả
+    assert e.mark is None
+
+
+def test_find_single_match_wraps_to_itself_and_not_found():
+    e = ed_of(b"hello world")
+    assert e.find(b"world") and e.selection() == (6, 11)
+    assert e.find() and e.selection() == (6, 11)
+    cur = e.cursor
+    assert not e.find(b"nope") and "Không tìm thấy" in e.message and e.cursor == cur
+    assert e.last_find == b"nope"
+
+
+def test_find_nothing_to_find():
+    e = ed_of(b"abc")
+    assert not e.find() and "Chưa có" in e.message
+
+
+def test_find_utf8():
+    e = ed_of("trình soạn thảo".encode())
+    assert e.find("thảo".encode())
+    assert e.cursor_line_col() == (0, 15)
+
+
+def test_goto_line_text():
+    e = ed_of(b"a\nb\nc")
+    assert e.goto_line_text(" 3 ") and e.cursor == 4
+    assert not e.goto_line_text("x") and "không hợp lệ" in e.message
+    assert not e.goto_line_text("0") and not e.goto_line_text("4") and "1…3" in e.message
+    e.mark = 0
+    assert e.goto_line_text("2") and e.mark is None and e.cursor == 2
+
+
+def test_keys_find_and_goto_prompts():
+    from splaypad.ui.keys import prompt_text
+    e = ed_of(b"alpha\nbeta\ngamma beta")
+    state = {}
+    for k in ["\x06", "b", "x", curses.KEY_BACKSPACE, "e", "t", "a"]:
+        handle_key(e, k, 20, state)
+    assert prompt_text(state) == "Tìm: beta" and len(e.buf) == 21    # chữ gõ vào prompt, không vào buffer
+    handle_key(e, "\n", 20, state)
+    assert prompt_text(state) is None and e.selection() == (6, 10)
+    handle_key(e, "\x0e", 20, state)
+    assert e.selection() == (17, 21)
+    handle_key(e, curses.KEY_F3, 20, state)
+    assert e.selection() == (6, 10)
+    for k in ["\x0c", "3", "\r"]:
+        handle_key(e, k, 20, state)
+    assert e.cursor == 11 and e.mark is None
+    for k in ["\x0c", "9", "\x1b"]:                 # Esc huỷ prompt, không đi đâu
+        handle_key(e, k, 20, state)
+    assert prompt_text(state) is None and e.cursor == 11
+    for k in ["\x06", "\n"]:                         # Enter trống = tìm lại "beta"
+        handle_key(e, k, 20, state)
+    assert e.selection() == (17, 21)

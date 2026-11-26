@@ -39,6 +39,7 @@ class Editor:
         self._shift_sel = False             # vùng chọn tạo bằng Shift+mũi tên
         self.clipboard = b""
         self.row_lens: list[int] = []      # số ký tự của từng dòng ở lần visible_lines gần nhất
+        self.last_find = b""
 
     @classmethod
     def open(cls, path: str, kind: str = "splay", **opts) -> "Editor":
@@ -222,6 +223,63 @@ class Editor:
             self.message = "Clipboard trống"
             return
         self._replace_selection(PasteCmd, self.clipboard, alone=True)
+
+    # ================================================================ tìm
+
+    def _scan(self, pattern: bytes, start: int, stop: int | None = None) -> int | None:
+        """Vị trí đầu tiên ≥ start của pattern (kết thúc ≤ stop nếu có). Quét iter_chunks nên không splay.
+
+        Giữ lại len(pattern) - 1 byte cuối của phần đã quét để bắt được kết quả nằm vắt qua hai chunk.
+        """
+        keep = len(pattern) - 1
+        carry, base = b"", start                        # base = offset của carry[0] trong buffer
+        for chunk in self.buf.iter_chunks(start):
+            data = carry + chunk
+            i = data.find(pattern)
+            if i >= 0:
+                pos = base + i
+                return pos if stop is None or pos + len(pattern) <= stop else None
+            carry = data[len(data) - keep :] if keep else b""
+            base += len(data) - len(carry)
+            if stop is not None and base + len(carry) >= stop:
+                return None
+        return None
+
+    def find(self, pattern: bytes | None = None) -> bool:
+        """Tìm tiếp từ cursor (hết file thì quay lại đầu); chọn kết quả. pattern rỗng/None = lần tìm trước."""
+        pattern = pattern or self.last_find
+        if not pattern:
+            self.message = "Chưa có gì để tìm"
+            return False
+        self.last_find = pattern
+        here = self.cursor
+        pos = self._scan(pattern, here)
+        wrapped = False
+        if pos is None and here > 0:
+            pos = self._scan(pattern, 0, here + len(pattern) - 1)
+            wrapped = pos is not None
+        text = pattern.decode("utf-8", errors="replace")
+        if pos is None:
+            self.message = f"Không tìm thấy: {text}"
+            return False
+        self._move_to(pos + len(pattern))
+        self.mark, self._shift_sel = pos, True          # chọn kết quả; mũi tên thường sẽ bỏ chọn
+        self.message = f"Tìm lại từ đầu file: {text}" if wrapped else ""
+        return True
+
+    def goto_line_text(self, text: str) -> bool:
+        """Đi tới dòng nhập từ prompt (đếm từ 1)."""
+        try:
+            n = int(text.strip())
+        except ValueError:
+            self.message = f"Số dòng không hợp lệ: {text!r}"
+            return False
+        if not 1 <= n <= self.buf.line_count():
+            self.message = f"Dòng phải trong 1…{self.buf.line_count()}"
+            return False
+        self.cancel_selection()
+        self.goto_line(n - 1)
+        return True
 
     # ================================================================ sửa
 

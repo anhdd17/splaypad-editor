@@ -5,7 +5,7 @@ import os
 import time
 
 from ..editor.editor import Editor
-from .keys import QUIT, handle_key
+from .keys import QUIT, handle_key, prompt_text
 
 
 def status_line(ed: Editor, kind: str, policy: str) -> str:
@@ -23,7 +23,7 @@ def status_line(ed: Editor, kind: str, policy: str) -> str:
     return " | ".join(parts)
 
 
-def draw(scr, ed: Editor, kind: str, policy: str) -> None:
+def draw(scr, ed: Editor, kind: str, policy: str, state: dict) -> None:
     h, w = scr.getmaxyx()
     text_h = max(1, h - 1)
     ed.scroll_to_cursor(text_h, w)
@@ -33,9 +33,14 @@ def draw(scr, ed: Editor, kind: str, policy: str) -> None:
         scr.addnstr(i, 0, text, w)
     for row, x0, x1 in ed.selection_spans(text_h, w):
         scr.chgat(row, x0, x1 - x0, curses.A_REVERSE)
-    scr.addnstr(h - 1, 0, status_line(ed, kind, policy).ljust(w - 1), w - 1, curses.A_REVERSE)
-    line, col = ed.cursor_line_col()
-    scr.move(min(line - ed.top, text_h - 1), min(col - ed.left, w - 1))
+    prompt = prompt_text(state)
+    bar = prompt if prompt is not None else status_line(ed, kind, policy)
+    scr.addnstr(h - 1, 0, bar.ljust(w - 1), w - 1, curses.A_REVERSE)
+    if prompt is not None:                              # cursor nằm ở ô nhập
+        scr.move(h - 1, min(len(prompt), w - 2))
+    else:
+        line, col = ed.cursor_line_col()
+        scr.move(min(line - ed.top, text_h - 1), min(col - ed.left, w - 1))
     scr.refresh()
 
 
@@ -46,7 +51,7 @@ def loop(scr, ed: Editor, kind: str, policy: str) -> None:
     scr.keypad(True)
     state: dict = {}
     while True:
-        draw(scr, ed, kind, policy)
+        draw(scr, ed, kind, policy, state)
         key = scr.get_wch()
         if key == curses.KEY_RESIZE:
             continue

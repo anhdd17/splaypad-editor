@@ -38,6 +38,9 @@ không làm hỏng file cũ.
 | Esc / Ctrl-G | bỏ chọn |
 | Ctrl-C / Ctrl-X / Ctrl-V | copy / cut / paste (clipboard nội bộ); gõ hoặc dán khi đang chọn thì thay vùng chọn |
 | Ctrl-Z / Ctrl-Y | undo / redo (gõ liền nhau được gộp theo từ) |
+| Ctrl-F | tìm (kết quả được chọn sẵn; Enter để trống = tìm lại chuỗi trước) |
+| Ctrl-N / F3 | tìm tiếp (hết file thì quay lại đầu) |
+| Ctrl-L | đến dòng |
 | Ctrl-S | lưu |
 | Ctrl-Q | thoát (bấm hai lần nếu chưa lưu) |
 

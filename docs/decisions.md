@@ -137,3 +137,13 @@ Mỗi quyết định ghi: bối cảnh, lựa chọn, lý do, hệ quả. Số 
 - **Test end-to-end:** `tests/test_app_pty.py` chạy app thật trong pseudo-terminal (`openpty` + `subprocess`,
   không dùng `pty.fork` vì fork trong worker nhiều luồng của xdist có thể deadlock) và kiểm *nội dung file* sau khi
   lưu – curses chỉ vẽ lại phần thay đổi nên chữ trên màn hình không dùng để assert được.
+
+## ADR-010 – Tìm kiếm và đến dòng (slice S4)
+
+- **Find quét bằng `iter_chunks`** từ cursor, giữ lại `len(pattern) - 1` byte giữa hai chunk liên tiếp để bắt kết quả
+  vắt qua ranh giới; `iter_chunks` không splay nên tìm kiếm không làm méo hình dạng cây (không lẫn vào RQ4).
+  Hết file thì tìm lại từ đầu tới cursor. Kết quả được chọn (như Shift-chọn), nên Ctrl-C / gõ đè dùng ngay được.
+- **Tìm chính xác theo byte**, phân biệt hoa/thường; chưa có tìm ngược và replace (S7).
+- **Prompt** (Ctrl-F, Ctrl-L) là một chế độ của `ui/keys.py` (`state["prompt"]`), vẽ ở thanh trạng thái.
+- **Đo trên file 100MB:** tìm chuỗi nằm ở cuối file: splay 0,05s (quét 102.555 chunk), gap 0,01s;
+  đến dòng 1.500.000: splay/treap < 0,1ms, piece ~40ms, gap ~100ms.
