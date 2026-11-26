@@ -19,6 +19,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import pandas as pd  # noqa: E402
+from matplotlib.ticker import FuncFormatter, LogLocator, NullFormatter  # noqa: E402
 
 # ---------------------------------------------------------------- bảng màu & mực (dataviz references/palette.md)
 SURFACE, INK, INK2, MUTED, GRID, AXIS = "#fcfcfb", "#0b0b0b", "#52514e", "#898781", "#e1e0d9", "#c3c2b7"
@@ -97,21 +98,54 @@ def label_ends(ax, items, gap_pt: float = 12.0) -> None:
     order = sorted(range(len(items)), key=lambda i: ys[i])
     placed: dict[int, float] = {}
     last = -1e9
-    for i in order:                                     # giãn từ dưới lên
+    for i in order:                                     # giãn từ dưới lên, tối thiểu gap_pt
         placed[i] = max(ys[i], last + gap_pt)
         last = placed[i]
-    shift = (max(placed.values()) - max(ys)) / 2 if len(items) > 1 else 0
+    # Dời cả nhóm xuống để trọng tâm nhãn trùng trọng tâm điểm (không đẩy nhóm lên quá cao),
+    # rồi giãn lại từ dưới lên phòng khi việc dời làm nhãn dưới cùng chui xuống quá thấp.
+    shift = sum(placed.values()) / len(placed) - sum(ys) / len(ys)
+    last = -1e9
+    for i in order:
+        placed[i] = max(placed[i] - shift, last + gap_pt)
+        last = placed[i]
+    # Giữ nhãn trong khung ô: không đè tiêu đề ô ở trên, không chui xuống nhãn trục ở dưới.
+    y0, y1 = (v * to_pt for v in ax.get_window_extent().intervaly)
+    top = max(placed.values())
+    if top > y1 - gap_pt / 2:
+        for i in placed:
+            placed[i] -= top - (y1 - gap_pt / 2)
+    bottom = min(placed.values())
+    if bottom < y0 + gap_pt / 2:
+        for i in placed:
+            placed[i] += y0 + gap_pt / 2 - bottom
     for i, (x, y, text, color) in enumerate(items):
-        dy = placed[i] - ys[i] - (shift if placed[i] - ys[i] > shift else 0)
+        dy = placed[i] - ys[i]
         ax.annotate(text, (x, y), xytext=(8, dy), textcoords="offset points", va="center", fontsize=8,
                     color=INK2, arrowprops=dict(arrowstyle="-", color=AXIS, lw=0.6) if abs(dy) > 2 else None)
         ax.plot([x], [y], "o", color=color, ms=6, mec=SURFACE, mew=2, zorder=5)
 
 
 def legend(fig, entries) -> None:
-    """Chú giải luôn có khi ≥ 2 chuỗi (dataviz): [(chữ, màu)], đặt trên cùng bên phải."""
+    """Chú giải luôn có khi ≥ 2 chuỗi (dataviz): [(chữ, màu)], một hàng ngay dưới tiêu đề, căn trái."""
     handles = [plt.Line2D([], [], color=c, marker="o", label=t) for t, c in entries]
-    fig.legend(handles=handles, loc="upper right", ncol=len(handles), fontsize=8)
+    fig.legend(handles=handles, loc="upper left", bbox_to_anchor=(0.005, 0.93), ncol=len(handles), fontsize=8,
+               handlelength=1.6, columnspacing=1.4)
+
+
+def plain_log(fig) -> None:
+    """Trục log ghi số thường (2, 30, 1,000) thay cho 2×10⁰. Trục hẹp (< 2 thập phân) ghi thêm vạch phụ 2, 3, 5."""
+    fmt = FuncFormatter(lambda v, _: f"{v:,.0f}" if v >= 100 else f"{v:g}")
+    for ax in fig.axes:
+        for axis, scale, lim in ((ax.yaxis, ax.get_yscale(), ax.get_ylim()), (ax.xaxis, ax.get_xscale(), ax.get_xlim())):
+            if scale != "log" or axis.get_transform().base != 10:     # trục chunk (cơ số 2) đã có nhãn riêng
+                continue
+            axis.set_major_formatter(fmt)
+            lo, hi = sorted(lim)
+            if lo > 0 and hi / lo < 100:
+                axis.set_minor_locator(LogLocator(subs=(2, 3, 5)))
+                axis.set_minor_formatter(fmt)
+            else:
+                axis.set_minor_formatter(NullFormatter())
 
 
 def no_data(ax, msg: str = "chưa có dữ liệu") -> None:
@@ -120,6 +154,7 @@ def no_data(ax, msg: str = "chưa có dữ liệu") -> None:
 
 
 def save(fig, out: Path, name: str, source: str) -> None:
+    plain_log(fig)
     fig.text(0.995, 0.005, f"nguồn: {source}", ha="right", va="bottom", fontsize=6, color=MUTED)
     out.mkdir(parents=True, exist_ok=True)
     fig.savefig(out / f"{name}.png", bbox_inches="tight")
@@ -200,7 +235,7 @@ def fig_rq1_scaling(df, out, tables) -> None:
     axes[0][0].set_ylabel("thời gian trung bình mỗi thao tác (µs)")
     legend(fig, [(BUFFERS[b], BUF_COLOR[b]) for b in BUFFERS if b in set(d["buffer"])])
     fig.suptitle("RQ1 – chi phí mỗi thao tác theo kích thước file", x=0.01, ha="left")
-    fig.tight_layout(rect=(0, 0, 1, 0.93))
+    fig.tight_layout(rect=(0, 0, 1, 0.88))
     save(fig, out, "rq1_scaling", df.attrs["source"])
     tab = d.pivot_table(index=["trace", "size_mb"], columns="buffer", values="mean_us").reset_index()
     write_table(tables / "rq1_scaling.md", "RQ1 – thời gian trung bình mỗi thao tác (µs), median", tab)
@@ -224,7 +259,7 @@ def fig_rq1_memory(df, out, tables) -> None:
         ax.margins(x=0.3)
     fig.suptitle("RQ1 – bộ nhớ và thời gian mở file (trace local-100)", x=0.01, ha="left")
     legend(fig, [(BUFFERS[b], BUF_COLOR[b]) for b in present])
-    fig.tight_layout(rect=(0, 0, 1, 0.93))
+    fig.tight_layout(rect=(0, 0, 1, 0.88))
     for ax, e in zip(axes, ends):
         label_ends(ax, e)
     save(fig, out, "rq1_memory", df.attrs["source"])
@@ -269,7 +304,7 @@ def fig_rq2(df, out, tables) -> None:
                          "node thăm / op": v})
         if pts:
             kx, vy = zip(*pts)
-            axes[1].plot(kx, vy, "-o", color=BUF_COLOR[b], ms=4, mec=SURFACE, mew=1)
+            axes[1].plot(kx, vy, "-", color=BUF_COLOR[b])     # nhiều điểm sát nhau: chỉ vẽ đường
             ends[1].append((kx[-1], vy[-1], BUFFERS[b], BUF_COLOR[b]))
     axes[1].set_title("số node duyệt mỗi thao tác")
     if ends[1]:
@@ -279,7 +314,7 @@ def fig_rq2(df, out, tables) -> None:
         no_data(axes[1], "chưa có lượt đo theo từng thao tác")
     fig.suptitle(f"RQ2 – ảnh hưởng của tính cục bộ, file {size:g}MB", x=0.01, ha="left")
     legend(fig, [(BUFFERS[b], BUF_COLOR[b]) for b in ("splay", "treap")])
-    fig.tight_layout(rect=(0, 0, 1, 0.93))
+    fig.tight_layout(rect=(0, 0, 1, 0.88))
     for ax, e in zip(axes, ends):
         label_ends(ax, e)
     save(fig, out, "rq2_locality", df.attrs["source"])
@@ -316,7 +351,7 @@ def fig_rq3(df, out, tables) -> None:
         ax.grid(axis="x", visible=False)
     fig.suptitle("RQ3 – kích thước chunk (splay, policy full)", x=0.01, ha="left")
     legend(fig, [(f"file {sz:g}MB", shades[sz]) for sz in sizes])
-    fig.tight_layout(rect=(0, 0, 1, 0.93))
+    fig.tight_layout(rect=(0, 0, 1, 0.88))
     for ax, e in zip(axes, ends):
         label_ends(ax, e)
     save(fig, out, "rq3_chunk", df.attrs["source"])

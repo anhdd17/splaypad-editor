@@ -170,3 +170,22 @@ Mỗi quyết định ghi: bối cảnh, lựa chọn, lý do, hệ quả. Số 
 - **Kiểm chứng:** phát lại một phiên soạn thảo trên mọi buffer cho cùng nội dung; phát lại qua `TracingBuffer`
   sinh lại trace giống từng dòng; test pty ghi bằng gap buffer, phát lại trên splay ra đúng file đã lưu.
 - `make record NAME=… BASE=…` lưu file nền thành `NAME.base` và cho sửa trên bản sao, vì Ctrl-S ghi đè file đang mở.
+
+## ADR-013 – Phương pháp benchmark (Bước 5)
+
+- **Ma trận** (`bench/runner.py --dry-run` in ra đầy đủ, 98 cấu hình × 5 lượt):
+  RQ1 – 4 cấu trúc × 5 trace tổng hợp (+ trace thật) × file 1/10/100MB; RQ2 – splay vs treap × local-d
+  (d = 1…10⁴) + uniform, file 10MB, kèm số node thăm theo log₂ khoảng cách; RQ3 – splay × chunk 16/64/256/1024
+  (16/64 chỉ tới 10MB, Flow 0.5); RQ4 – 5 policy × scroll/local (+ trace thật) × 10/100MB. Cấu hình trùng giữa các
+  thí nghiệm chỉ chạy một lần.
+- **Mỗi lượt một process con** `python -O`: đọc đĩa và dựng cây đo riêng; warm-up 3000 thao tác trên buffer 256KB
+  riêng (để RSS không lẫn buffer warm-up); `gc.collect()` rồi `gc.disable()` khi phát lại; độ trễ từng thao tác bằng
+  `perf_counter_ns`. Lặp theo lượt ở ngoài, cấu hình ở trong.
+- **Ngân sách 30s phát lại mỗi lượt:** gap buffer / piece table cần O(n) mỗi lần tra dòng; trên 100MB một lượt
+  scroll mất ~20 phút chỉ để đo lại cùng một chi phí (cả ma trận ~6–7 giờ). Lượt bị cắt vẫn có hàng trăm thao tác,
+  ghi `ops`/`ops_total`/`truncated`; hình so sánh dùng µs/thao tác thay cho tổng thời gian.
+- **Trace tổng hợp** (`bench/gen_traces.py`, seed 1, 10.000 thao tác): sau mỗi lần sửa có xác suất 0,5 một lần
+  "render" (`O` + `R` 4KB) – thao tác đọc là biến số của RQ4. Trace gắn với *kích thước* file nền (`# base_size`).
+- **Hình và bảng** (`bench/plot.py`): median qua các lượt; mỗi hình có bảng Markdown trong `report/tables/`.
+  Màu theo skill dataviz: mỗi cấu trúc/policy một màu cố định (bảng màu đã chạy validator: đạt CVD/normal-vision,
+  cảnh báo tương phản → luôn có nhãn trực tiếp + bảng số), dải một màu cho chunk/kích thước, một trục y mỗi ô.

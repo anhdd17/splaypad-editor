@@ -64,6 +64,13 @@ Mở bản sao của `BASE` trong SplayPad; mọi thao tác lên buffer (sửa, 
 make bench && make plots
 ```
 
+`make bench` sinh file nền và trace tổng hợp (có seed) nếu chưa có, chạy ma trận RQ1–RQ4 (mỗi lượt một process
+riêng, tối đa 30s phát lại mỗi lượt) và ghi `bench/results/bench-<thời điểm>-<commit>.csv` cùng file `.env.json`
+(CPU, RAM, OS, Python, `pip freeze`). Mất khoảng 1–1,5 giờ trên Apple M4; nên cắm sạc và đóng ứng dụng nặng.
+`make plots` đọc CSV mới nhất, sinh `report/figures/*.png` và bảng số liệu `report/tables/*.md`.
+
+Thử nhanh harness (file 1MB, 1 lượt): `.venv/bin/python -O bench/runner.py --quick`. Xem ma trận: `--dry-run`.
+
 ## Báo cáo
 
 Viết bằng Markdown ở `report/report.md`, chuyển bằng [Pandoc](https://pandoc.org):
