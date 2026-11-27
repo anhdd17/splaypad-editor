@@ -2,7 +2,7 @@ PYTHON ?= python3.12
 VENV   ?= .venv
 PY     := $(VENV)/bin/python
 
-.PHONY: venv install lint test difftest spike bench plots diagrams report report-docx run record clean
+.PHONY: venv install lint data test difftest spike bench plots diagrams report report-docx run record clean
 
 venv:
 	test -x $(PY) || $(PYTHON) -m venv $(VENV)
@@ -11,6 +11,9 @@ install: venv
 	$(PY) -m pip install -q --upgrade pip
 	$(PY) -m pip install -q -e ".[dev,bench]"
 	$(PY) -m pip freeze --exclude-editable > requirements-lock.txt
+
+data:              # sinh file log mẫu 1/10/100MB vào data/ (seed cố định, không commit)
+	cd bench && ../$(PY) -c "from common import base_file; [print(base_file(s)) for s in (1, 10, 100)]"
 
 lint:              # ruff (lint) + mypy (kiểu) – CI chạy cùng test
 	$(PY) -m ruff check .

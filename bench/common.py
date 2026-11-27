@@ -11,13 +11,13 @@ from spike_build import MB, gen_file, peak_rss_mb  # noqa: F401  (dùng lại t�
 
 ROOT = Path(__file__).resolve().parent
 REPO = ROOT.parent
-DATA_DIR = ROOT / "data"
+DATA_DIR = ROOT.parent / "data"         # data/ ở gốc repo (không commit)
 TRACES = ROOT / "traces"
 RESULTS = ROOT / "results"
 
 
 def base_file(size_mb: int) -> Path:
-    """File nền giống log, sinh một lần với seed cố định (bench/data, không commit)."""
+    """File nền giống log, sinh một lần với seed cố định (data/ ở gốc repo, không commit)."""
     path = DATA_DIR / f"log_{size_mb}mb.txt"
     if not path.exists():
         print(f"sinh {path} ...", file=sys.stderr, flush=True)

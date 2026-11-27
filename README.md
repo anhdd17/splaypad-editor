@@ -28,6 +28,9 @@ make run FILE=path/to/file.txt
 # hoặc
 .venv/bin/splaypad FILE [--read-only] [--tab-width 4] [--no-line-numbers] [--no-mouse]
 .venv/bin/splaypad --help
+
+make data             # sinh file log mẫu 1/10/100MB vào data/ (không commit)
+.venv/bin/splaypad data/log_100mb.txt
 ```
 
 File chưa tồn tại thì mở buffer rỗng, tạo file khi lưu. File không có quyền ghi tự mở ở chế độ chỉ đọc.
@@ -127,6 +130,7 @@ src/splaypad/ui/       giao diện curses: vòng lặp, phím/chuột, theme, de
 src/splaypad/log.py    cấu hình logging
 tests/                 unit, invariant, differential, end-to-end trong pty (ptyterm.py: màn hình qua pyte)
 bench/                 sinh trace, runner, plot, kết quả CSV
+data/                  file log mẫu để thử / benchmark (sinh bằng make data, không commit)
 scripts/screenshots.py chụp ảnh màn hình cho README (docs/img/)
 report/                báo cáo Markdown (report.md) + references.bib + figures/ + diagrams/
 docs/                  decisions.md (ADR), img/

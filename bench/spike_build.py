@@ -24,7 +24,7 @@ from array import array
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-DATA_DIR = ROOT / "data"
+DATA_DIR = ROOT.parent / "data"         # data/ ở gốc repo (không commit)
 RESULTS = ROOT / "results" / "spike_build.csv"
 MB = 1 << 20
 

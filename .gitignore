@@ -9,7 +9,7 @@ htmlcov/
 .DS_Store
 # file thử lớn, không commit
 *.big
-bench/data/
+/data/
 report/report.pdf
 report/report.docx
 bench/logs/
